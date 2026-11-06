@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -61,6 +60,7 @@ public class AuthService
         }
         
         Current = new Session { token = r.Data.token, displayName = r.Data.user.displayName };
+        api.AuthToken = r.Data.token;
         SessionChanged?.Invoke(Current);
         return LoginResult.Success;
     }
