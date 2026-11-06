@@ -366,6 +366,13 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.yasirkula.dynamicpanels": {
+      "version": "https://github.com/yasirkula/UnityDynamicPanels.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "11036028b90df09212e2bc238c13983a4cfcd105"
+    },
     "jp.setchi.fancyscrollview": {
       "version": "https://github.com/setchi/FancyScrollView.git#upm",
       "depth": 0,
