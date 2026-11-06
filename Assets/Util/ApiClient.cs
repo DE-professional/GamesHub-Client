@@ -38,12 +38,12 @@ public class ApiClient
     public string AuthToken { get; set; }
     public event Action Unauthorized;
 
-    public Awaitable<ApiResult<T>> Get<T>(string path) => Send<T>("GET", path, null);
-    public Awaitable<ApiResult<T>> Post<T>(string path, object body) => Send<T>("POST", path,body);
-    public Awaitable<ApiResult<T>> Put<T>(string path, object body) => Send<T>("PUT", path,body);
-    public Awaitable<ApiResult<T>> Delete<T>(string path) => Send<T>("DELETE", path, null);
+    public Awaitable<ApiResult<T>> Get<T>(string path, bool authenticate = true) => Send<T>("GET", path, null, authenticate);
+    public Awaitable<ApiResult<T>> Post<T>(string path, object body, bool authenticate = true) => Send<T>("POST", path,body, authenticate);
+    public Awaitable<ApiResult<T>> Put<T>(string path, object body, bool authenticate = true) => Send<T>("PUT", path,body, authenticate);
+    public Awaitable<ApiResult<T>> Delete<T>(string path, bool authenticate = true) => Send<T>("DELETE", path, null, authenticate);
     
-    async Awaitable<ApiResult<T>> Send<T>(string method, string path, object body)
+    async Awaitable<ApiResult<T>> Send<T>(string method, string path, object body, bool authenticate = true)
     {
         using var req = new UnityWebRequest(baseUrl + path, method);
         req.downloadHandler = new DownloadHandlerBuffer();
@@ -55,7 +55,7 @@ public class ApiClient
             req.SetRequestHeader("Content-Type", "application/json");
         }
 
-        bool hadToken = !string.IsNullOrEmpty(AuthToken);
+        bool hadToken = authenticate && !string.IsNullOrEmpty(AuthToken);
         if (hadToken) req.SetRequestHeader("Authorization","Bearer " + AuthToken);
         await req.SendWebRequest();
         if (req.result == UnityWebRequest.Result.ConnectionError)

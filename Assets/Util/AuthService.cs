@@ -47,7 +47,7 @@ public class AuthService
 
     public async Awaitable<LoginResult> LoginAsync(string email, string password)
     {
-        var r = await api.Post<LoginResponse>("/auth/login", new LoginRequest { email = email, password = password });
+        var r = await api.Post<LoginResponse>("/auth/login", new LoginRequest { email = email, password = password }, authenticate: false);
 
         switch (r.Outcome)
         {
