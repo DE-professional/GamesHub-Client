@@ -40,6 +40,8 @@ public class MinesweeperGame : MonoBehaviour
         public bool isFlagged;
         public int adjacentMines;
         public GameObject uiButton;
+        public MineTile tile;
+        public bool Alternate => (x + y) % 2 == 1;
     }
     
     
@@ -58,6 +60,7 @@ public class MinesweeperGame : MonoBehaviour
         flagsRemaining = mineCount;
         
         UpdateFlagText();
+        if (timerText != null) timerText.text = "Time: 0";
         LoadHighScore(); // This also checks if a new day has started
         GenerateBoard();
     }
@@ -92,16 +95,12 @@ public class MinesweeperGame : MonoBehaviour
             for (int x = 0; x < width; x++)
             {
                 GameObject obj = Instantiate(buttonPrefab, boardPanel);
-                
-                // Ensure the button starts with completely blank text
-                TextMeshProUGUI btnText = obj.GetComponentInChildren<TextMeshProUGUI>();
-                if (btnText != null) btnText.text = "";
 
-                Cell cell = new Cell { x = x, y = y, uiButton = obj };
+                Cell cell = new Cell { x = x, y = y, uiButton = obj, tile = obj.GetComponent<MineTile>() };
                 grid[x, y] = cell;
+                cell.tile.SetHidden(cell.Alternate);
 
                 // Setup click listener supporting left and right clicks
-                Button btn = obj.GetComponent<Button>();
                 int rx = x;
                 int ry = y;
                 
@@ -126,25 +125,8 @@ public class MinesweeperGame : MonoBehaviour
             if (cell.isRevealed) return;
 
             cell.isFlagged = !cell.isFlagged;
-            TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-
-            if (cell.isFlagged)
-            {
-                flagsRemaining--;
-                if (btnText != null)
-                {
-                    btnText.text = "F"; // Using 'F' for Flag
-                }
-            }
-            else
-            {
-                flagsRemaining++;
-                if (btnText != null)
-                {
-                    btnText.text = "";
-                    btnText.color = Color.black;
-                }
-            }
+            cell.tile.SetFlagged(cell.isFlagged);
+            flagsRemaining += cell.isFlagged ? -1 : 1;
             UpdateFlagText();
             return;
         }
@@ -241,22 +223,10 @@ public class MinesweeperGame : MonoBehaviour
         if (cell.isRevealed || cell.isFlagged) return;
 
         cell.isRevealed = true;
-        cell.uiButton.GetComponent<Image>().color = Color.gray;
+        cell.tile.SetRevealed(cell.adjacentMines, cell.Alternate);
 
-        TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-
-        if (cell.adjacentMines > 0)
+        if (cell.adjacentMines == 0)
         {
-            if (btnText != null)
-            {
-                btnText.text = cell.adjacentMines.ToString();
-                btnText.color = Color.black;
-            }
-        }
-        else
-        {
-            if (btnText != null) btnText.text = "";
-
             for (int dx = -1; dx <= 1; dx++)
             {
                 for (int dy = -1; dy <= 1; dy++)
@@ -275,22 +245,12 @@ public class MinesweeperGame : MonoBehaviour
     void BlowUp(Cell clickedMine)
     {
         gameOver = true;
-        clickedMine.uiButton.GetComponent<Image>().color = Color.red;
         Debug.Log("Game Over!");
         if (returnToMenuButton != null) returnToMenuButton.SetActive(true);
         
         foreach (var cell in grid)
         {
-            if (cell.isMine)
-            {
-                TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-                if (btnText != null)
-                {
-                    btnText.text = "*";
-                    btnText.color = Color.white;
-                }
-                cell.uiButton.GetComponent<Image>().color = Color.red;
-            }
+            if (cell.isMine) cell.tile.SetMine(cell == clickedMine);
         }
     }
 
