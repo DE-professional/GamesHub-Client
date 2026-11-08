@@ -28,30 +28,37 @@ public readonly struct ApiResult<T>
     /// <summary>True when <see cref="Outcome"/> is <see cref="ApiOutcome.Success"/>.</summary>
     public bool Ok => Outcome == ApiOutcome.Success;
 
+    /// <summary>
+    /// The <c>error.code</c> from the server's error body when <see cref="Outcome"/> is
+    /// <see cref="ApiOutcome.HttpError"/>, e.g. <c>"already_submitted"</c>. Null for other
+    /// outcomes, and when the body was missing or not in the server's error format.
+    /// </summary>
+    public readonly string ErrorCode;
 
-    ApiResult(ApiOutcome outcome, long status, T data)
-    {   
+    ApiResult(ApiOutcome outcome, long status, T data, string errorCode)
+    {
         Outcome = outcome;
         Status = status;
         Data = data;
+        ErrorCode = errorCode;
     }
 
     /// <summary>Creates a successful result.</summary>
     /// <param name="status">HTTP response code (2xx).</param>
     /// <param name="data">Parsed body, or <c>default</c> if the body was empty.</param>
-    public static ApiResult<T> Success(long status, T data) => new(ApiOutcome.Success,status,data);
-
+    public static ApiResult<T> Success(long status, T data) => new(ApiOutcome.Success, status, data, null);
+    
     /// <summary>Creates an <see cref="ApiOutcome.HttpError"/> result.</summary>
     /// <param name="status">HTTP response code returned by the server.</param>
-    public static ApiResult<T> Fail(long status) => new (ApiOutcome.HttpError,status,default);
+    /// <param name="errorCode">The server's <c>error.code</c>, or null if the body had none.</param>
+    public static ApiResult<T> Fail(long status, string errorCode) => new(ApiOutcome.HttpError, status, default, errorCode);
 
     /// <summary>Creates an <see cref="ApiOutcome.ParseError"/> result for a 2xx response whose body was not valid JSON.</summary>
     /// <param name="status">HTTP response code returned by the server.</param>
-    public static ApiResult<T> ParseError(long status) => new (ApiOutcome.ParseError, status, default);
+    public static ApiResult<T> ParseError(long status) => new(ApiOutcome.ParseError, status, default, null);
 
     /// <summary>Creates an <see cref="ApiOutcome.NetworkError"/> result with status 0.</summary>
-    public static ApiResult<T> Network() => new (ApiOutcome.NetworkError,0,default);
-}
+    public static ApiResult<T> Network() => new(ApiOutcome.NetworkError, 0, default, null);}
 
 /// <summary>The kinds of result an <see cref="ApiClient"/> request can produce.</summary>
 public enum ApiOutcome
@@ -83,6 +90,9 @@ public enum ApiOutcome
 public class ApiClient
 {
     readonly string baseUrl;
+    
+    [Serializable] struct ErrorBody { public ErrorDetail error; }
+    [Serializable] struct ErrorDetail { public string code; public string message; }
 
     /// <summary>Creates a client for the given server.</summary>
     /// <param name="baseUrl">
@@ -146,6 +156,23 @@ public class ApiClient
     /// </list>
     /// Exceptions thrown by <see cref="UnityWebRequest.SendWebRequest"/> itself are not caught.
     /// </remarks>
+    /// <summary>
+    /// Extracts <c>error.code</c> from an error response body. Returns null for an empty body,
+    /// non-JSON (e.g. an HTML page from a proxy), or JSON without that field.
+    /// </summary>
+    static string ReadErrorCode(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        try
+        {
+            string code = JsonUtility.FromJson<ErrorBody>(text).error.code;
+            return string.IsNullOrEmpty(code) ? null : code;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
     async Awaitable<ApiResult<T>> Send<T>(string method, string path, object body, bool authenticate = true)
     {
         using var req = new UnityWebRequest(baseUrl + path, method);
@@ -158,19 +185,20 @@ public class ApiClient
             req.SetRequestHeader("Content-Type", "application/json");
         }
 
-        bool hadToken = authenticate && !string.IsNullOrEmpty(AuthToken);
-        if (hadToken) req.SetRequestHeader("Authorization","Bearer " + AuthToken);
+        string sentToken  = authenticate && !string.IsNullOrEmpty(AuthToken) ? AuthToken : null;
+        if (sentToken != null) req.SetRequestHeader("Authorization", "Bearer " + sentToken);
+        
         await req.SendWebRequest();
         if (req.result == UnityWebRequest.Result.ConnectionError)
             return ApiResult<T>.Network();
 
         // Only a rejected token counts as "unauthorized"; a 401 on a request sent without a
         // token (e.g. wrong password at login) is left for the caller to interpret.
-        if (req.responseCode == 401 && hadToken)
+        if (req.responseCode == 401 && sentToken != null && sentToken == AuthToken)
             Unauthorized?.Invoke();
 
         if (req.result != UnityWebRequest.Result.Success)
-            return ApiResult<T>.Fail(req.responseCode);
+            return ApiResult<T>.Fail(req.responseCode, ReadErrorCode(req.downloadHandler.text));
         
         string text = req.downloadHandler.text;
         

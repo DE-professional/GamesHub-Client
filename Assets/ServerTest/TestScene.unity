@@ -305,7 +305,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1183863559}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: APITest, Assembly-CSharp
         m_MethodName: OnButton
         m_Mode: 1
@@ -396,9 +396,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1183863557}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4445dfbf732da483c950445a49d838ec, type: 3}
+  m_Script: {fileID: 11500000, guid: 45763512d257462a91a9d1256ed87de3, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::APITest
+  m_EditorClassIdentifier: Assembly-CSharp::ApiClientSmokeTest
 --- !u!1 &1535492006
 GameObject:
   m_ObjectHideFlags: 0

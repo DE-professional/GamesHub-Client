@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb31ae943c556418393e3bf72b89e0e0, type: 3}
+  m_Name: RetroTheme
+  m_EditorClassIdentifier: Assembly-CSharp::Menu.RetroTheme
+  font: {fileID: 11400000, guid: 754abeaa55b4749e8bfb84107f53ecee, type: 2}
+  pill: {fileID: 21300000, guid: 0596caf6404df43cd951c045402cd488, type: 3}
+  cream: {r: 0.95, g: 1, b: 0.47, a: 1}
+  burnt: {r: 0.65, g: 0.34, b: 0, a: 1}
+  coral: {r: 1, g: 0.53, b: 0.45, a: 1}
+  mustard: {r: 0.96, g: 0.71, b: 0.18, a: 1}
+  orange: {r: 0.91, g: 0.45, b: 0.13, a: 1}
+  background: {r: 0.17, g: 0.1, b: 0.07, a: 1}
+  panel: {r: 0.27, g: 0.16, b: 0.09, a: 1}
+  ink: {r: 0.2, g: 0.1, b: 0.04, a: 1}
+  depth: {x: -6, y: -6}
+  buttonRadius: 26
+  panelRadius: 22

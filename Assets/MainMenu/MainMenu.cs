@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Menu;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -16,24 +17,22 @@ public class MainMenu : MonoBehaviour
     public List<string> gameSceneNames = new List<string>();
 
     [Header("Look")]
-    public Color backgroundColor = new Color(0.08f, 0.09f, 0.14f);
-    public Color buttonColor = new Color(0.20f, 0.45f, 0.85f);
-    public Color textColor = Color.white;
+    public RetroTheme theme;
+
+    [Tooltip("Where the menu is built, under the scene's logo. Left empty, a standalone canvas is created.")]
+    public RectTransform menuRoot;
 
     private GameObject mainPanel;
     private GameObject gamesPanel;
-    private Font font;
 
     private void Awake()
     {
-        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-
+        if (theme == null) theme = ScriptableObject.CreateInstance<RetroTheme>(); // default colors, no font/sprite
         EnsureEventSystem();
-        Canvas canvas = CreateCanvas();
+        Transform root = menuRoot != null ? menuRoot : CreateCanvas().transform;
 
-        mainPanel = BuildMainPanel(canvas.transform);
-        gamesPanel = BuildGamesPanel(canvas.transform);
+        mainPanel = BuildMainPanel(root);
+        gamesPanel = BuildGamesPanel(root);
         ShowMain();
     }
 
@@ -82,17 +81,19 @@ public class MainMenu : MonoBehaviour
     {
         GameObject panel = CreatePanel("MainPanel", parent);
 
-        CreateText("Title", panel.transform, gameTitle, 90, FontStyle.Bold,
-            new Vector2(0.5f, 0.78f), new Vector2(900, 140));
+        // The scene already shows the logo; only draw a title when running standalone
+        if (menuRoot == null)
+            RetroUI.LayeredText("Title", panel.transform, theme, gameTitle, 110,
+                new Vector2(0.5f, 0.8f), new Vector2(900, 160));
 
         GameObject column = new GameObject("Buttons", typeof(RectTransform), typeof(VerticalLayoutGroup));
         column.transform.SetParent(panel.transform, false);
         RectTransform rt = column.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.38f);
-        rt.sizeDelta = new Vector2(320, 300);
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.4f);
+        rt.sizeDelta = new Vector2(440, 330);
 
         VerticalLayoutGroup v = column.GetComponent<VerticalLayoutGroup>();
-        v.spacing = 20;
+        v.spacing = 32;
         v.childAlignment = TextAnchor.MiddleCenter;
         v.childControlWidth = v.childControlHeight = true;
         v.childForceExpandWidth = v.childForceExpandHeight = true;
@@ -108,24 +109,24 @@ public class MainMenu : MonoBehaviour
     {
         GameObject panel = CreatePanel("GamesPanel", parent);
 
-        CreateText("Header", panel.transform, "Select a Game", 60, FontStyle.Bold,
-            new Vector2(0.5f, 0.88f), new Vector2(900, 100));
+        RetroUI.LayeredText("Header", panel.transform, theme, "Select a Game", 64,
+            new Vector2(0.5f, 0.69f), new Vector2(900, 90));
 
         // Size the grid to the number of games, shrinking cell height when the
         // rows wouldn't otherwise fit between the header and the Back button
         const int maxColumns = 3;
-        const float maxGridHeight = 420f;
-        Vector2 spacing = new Vector2(30, 40);
+        const float maxGridHeight = 380f;
+        Vector2 spacing = new Vector2(40, 40);
         int count = gameSceneNames.Count;
         int columns = Mathf.Clamp(count, 1, maxColumns);
         int rows = Mathf.Max(1, Mathf.CeilToInt(count / (float)maxColumns));
-        float cellHeight = Mathf.Min(200f, (maxGridHeight - spacing.y * (rows - 1)) / rows);
-        Vector2 cellSize = new Vector2(280, cellHeight);
+        float cellHeight = Mathf.Min(170f, (maxGridHeight - spacing.y * (rows - 1)) / rows);
+        Vector2 cellSize = new Vector2(360, cellHeight);
 
         GameObject grid = new GameObject("Slots", typeof(RectTransform), typeof(GridLayoutGroup));
         grid.transform.SetParent(panel.transform, false);
         RectTransform rt = grid.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.475f); // midway between header and Back button
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.405f); // midway between header and Back button
         rt.sizeDelta = new Vector2(columns * cellSize.x + (columns - 1) * spacing.x,
                                    rows * cellSize.y + (rows - 1) * spacing.y);
 
@@ -144,13 +145,14 @@ public class MainMenu : MonoBehaviour
                             && !string.IsNullOrEmpty(gameDisplayNames[index]))
                 ? gameDisplayNames[index]
                 : $"Game {index + 1}";
-            CreateButton($"Slot{i + 1}", grid.transform, label, () => OnSelectGame(index));
+            // Cycle the logo's palette across the slots
+            Color[] faces = { theme.mustard, theme.coral, theme.orange };
+            RetroUI.Button($"Slot{i + 1}", grid.transform, theme, label, () => OnSelectGame(index), 36,
+                faces[i % faces.Length]);
         }
 
-        Button back = CreateButton("BackButton", panel.transform, "Back", ShowMain);
-        RectTransform brt = back.GetComponent<RectTransform>();
-        brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.1f);
-        brt.sizeDelta = new Vector2(240, 60);
+        Button back = RetroUI.Button("BackButton", panel.transform, theme, "Back", ShowMain, 32, theme.cream);
+        RetroUI.Place((RectTransform)back.transform, new Vector2(0.5f, 0.145f), new Vector2(260, 72));
 
         return panel;
     }
@@ -165,8 +167,11 @@ public class MainMenu : MonoBehaviour
 
         CanvasScaler scaler = go.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1280, 720);
+        scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
+
+        Image bg = go.AddComponent<Image>();
+        bg.color = theme.background;
         return canvas;
     }
 
@@ -180,57 +185,14 @@ public class MainMenu : MonoBehaviour
 
     private GameObject CreatePanel(string name, Transform parent)
     {
-        GameObject panel = new GameObject(name, typeof(RectTransform), typeof(Image));
-        panel.transform.SetParent(parent, false);
-        RectTransform rt = panel.GetComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-        panel.GetComponent<Image>().color = backgroundColor;
-        return panel;
-    }
-
-    private Text CreateText(string name, Transform parent, string content, int size,
-        FontStyle style, Vector2 anchor, Vector2 sizeDelta)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = anchor;
-        rt.sizeDelta = sizeDelta;
-
-        Text t = go.GetComponent<Text>();
-        t.font = font;
-        t.text = content;
-        t.fontSize = size;
-        t.fontStyle = style;
-        t.alignment = TextAnchor.MiddleCenter;
-        t.color = textColor;
-        return t;
+        // Transparent: the scene's backdrop and logo show through
+        RectTransform rt = RetroUI.Rect(name, parent);
+        RetroUI.Stretch(rt);
+        return rt.gameObject;
     }
 
     private Button CreateButton(string name, Transform parent, string label, UnityEngine.Events.UnityAction onClick)
     {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-
-        Image img = go.GetComponent<Image>();
-        img.color = buttonColor;
-
-        Button btn = go.GetComponent<Button>();
-        btn.targetGraphic = img;
-        ColorBlock colors = btn.colors;
-        colors.highlightedColor = new Color(0.35f, 0.6f, 1f);
-        colors.pressedColor = new Color(0.12f, 0.3f, 0.6f);
-        btn.colors = colors;
-        btn.onClick.AddListener(onClick);
-
-        Text t = CreateText("Label", go.transform, label, 32, FontStyle.Normal, new Vector2(0.5f, 0.5f), Vector2.zero);
-        RectTransform trt = t.GetComponent<RectTransform>();
-        trt.anchorMin = Vector2.zero;
-        trt.anchorMax = Vector2.one;
-        trt.offsetMin = trt.offsetMax = Vector2.zero;
-
-        return btn;
+        return RetroUI.Button(name, parent, theme, label, onClick, 44);
     }
 }

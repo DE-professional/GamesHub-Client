@@ -65,6 +65,8 @@ public class AuthService
     }
 
     private readonly ApiClient api;
+    
+    public const string TokenKey = "GamesHub.AuthToken";
 
     /// <summary>The current session, or null when logged out.</summary>
     public Session Current { get; private set; }
@@ -117,7 +119,7 @@ public class AuthService
         }
         
         Current = new Session { token = r.Data.token, displayName = r.Data.user.displayName };
-        api.AuthToken = r.Data.token;
+        SetToken(r.Data.token);
         SessionChanged?.Invoke(Current);
         return LoginResult.Success;
     }
@@ -128,8 +130,17 @@ public class AuthService
     /// </summary>
     public void Logout()
     {
+        if (Current == null && api.AuthToken == null) return;
         Current = null;
-        api.AuthToken = null;
+        SetToken(null);
         SessionChanged?.Invoke(null);
+    }
+    /// <summary>Sets the API token and its persisted copy together. Null clears both.</summary>
+    void SetToken(string token)
+    {
+        api.AuthToken = token;
+        if (token == null) PlayerPrefs.DeleteKey(TokenKey);
+        else PlayerPrefs.SetString(TokenKey, token);
+        PlayerPrefs.Save();
     }
 }
