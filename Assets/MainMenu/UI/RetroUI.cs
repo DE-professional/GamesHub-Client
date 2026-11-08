@@ -41,10 +41,13 @@ namespace Menu
 
         public static void SetPill(Image img, RetroTheme theme, float radius)
         {
-            img.sprite = theme.pill;
+            // Scaling the small pill up blurs its edge, so big radii use the large one
+            Sprite sprite = theme.pill;
+            if (theme.pillLarge && (!sprite || radius > sprite.border.x * 1.5f)) sprite = theme.pillLarge;
+            img.sprite = sprite;
             img.type = Image.Type.Sliced;
             // The sprite's corner is `border` px wide; scale it down to the requested radius
-            float corner = theme.pill ? theme.pill.border.x : radius;
+            float corner = sprite ? sprite.border.x : radius;
             img.pixelsPerUnitMultiplier = corner / Mathf.Max(1f, radius);
         }
 
@@ -115,7 +118,58 @@ namespace Menu
             retro.normalColor = faceImg.color;
             retro.hoverColor = theme.cream;
             retro.depth = theme.depth;
+            retro.disabledTint = theme.panel;
             return btn;
+        }
+
+        // Converts an existing scene Button to the retro look in place, keeping its onClick wiring.
+        // The label (first TMP child) moves onto the new face; the root image becomes an invisible hit area.
+        public static RetroButton Restyle(Button btn, RetroTheme theme, Color face, float radius, float fontSize = 32f)
+        {
+            Transform root = btn.transform;
+            if (root.TryGetComponent(out RetroButton existing)) return existing;
+
+            TextMeshProUGUI label = root.GetComponentInChildren<TextMeshProUGUI>(true);
+
+            Image shadow = Pill("Shadow", root, theme, theme.burnt, radius);
+            Stretch(shadow.rectTransform, theme.depth);
+            shadow.raycastTarget = false;
+            shadow.transform.SetAsFirstSibling();
+
+            Image faceImg = Pill("Face", root, theme, face, radius);
+            Stretch(faceImg.rectTransform);
+            faceImg.raycastTarget = false;
+            faceImg.transform.SetSiblingIndex(1);
+
+            if (label != null)
+            {
+                label.transform.SetParent(faceImg.transform, false);
+                Stretch(label.rectTransform);
+                label.font = theme.font;
+                label.fontSize = fontSize;
+                label.color = theme.ink;
+                label.text = label.text.Trim().ToUpperInvariant();
+                label.characterSpacing = 2f;
+                label.alignment = TextAlignmentOptions.Center;
+                label.raycastTarget = false;
+            }
+
+            if (root.TryGetComponent(out Image hit))
+            {
+                hit.sprite = null;
+                hit.color = Color.clear;
+            }
+            btn.transition = Selectable.Transition.None;
+
+            RetroButton retro = root.gameObject.AddComponent<RetroButton>();
+            retro.face = faceImg.rectTransform;
+            retro.faceImage = faceImg;
+            retro.shadow = shadow.rectTransform;
+            retro.normalColor = face;
+            retro.hoverColor = theme.cream;
+            retro.depth = theme.depth;
+            retro.disabledTint = theme.panel;
+            return retro;
         }
 
         // Sunset disc: lower half is sliced by background-colored bars that thicken toward the bottom

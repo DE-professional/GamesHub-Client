@@ -15,6 +15,8 @@ namespace Menu
         public RectTransform shadow;
         public Color normalColor = Color.white;
         public Color hoverColor = Color.white;
+        [Tooltip("Disabled buttons fade toward this instead of going see-through")]
+        public Color disabledTint = new Color(0.27f, 0.16f, 0.09f);
         public Vector2 depth = new Vector2(-6f, -6f);
         public float speed = 25f;
 
@@ -46,9 +48,11 @@ namespace Menu
             if (shadow) shadow.anchoredPosition = depth;
             if (face) face.anchoredPosition = depth * sink;
             if (!faceImage) return;
-            Color c = Color.Lerp(normalColor, hoverColor, Mathf.Clamp01(sink * 2f));
-            if (button && !button.interactable) c.a *= 0.5f;
-            faceImage.color = c;
+            // Disabled buttons also sit sunk, so skip the hover color and just mute the normal one
+            bool disabled = button && !button.interactable;
+            faceImage.color = disabled
+                ? Color.Lerp(normalColor, disabledTint, 0.6f)
+                : Color.Lerp(normalColor, hoverColor, Mathf.Clamp01(sink * 2f));
         }
 
         public void OnPointerEnter(PointerEventData e) => hovered = true;

@@ -11,6 +11,8 @@ namespace Menu
         public TMP_FontAsset font;
         [Tooltip("White 9-sliced pill; corner radius is set per Image via pixelsPerUnitMultiplier")]
         public Sprite pill;
+        [Tooltip("Higher-res pill used for big radii (tables, discs) so edges stay crisp")]
+        public Sprite pillLarge;
 
         [Header("Logo colors")]
         public Color cream = new Color(0.95f, 1f, 0.47f);

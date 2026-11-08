@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b0af7788bb9064ec1a64944678f73ec5, type: 3}
   m_Name: CardAtlas
   m_EditorClassIdentifier: Assembly-CSharp::CardAtlas
-  cardBackground: {fileID: 21300000, guid: 7166066cc7648ec4cb72cfe6a314f683, type: 3}
-  cardBack: {fileID: -5044639396517056953, guid: fe7306d67f4e1aa46b5cd034573995a1, type: 3}
+  cardBackground: {fileID: 21300000, guid: 946a438c5968c4acaa4be9f1580805e6, type: 3}
+  cardBack: {fileID: 21300000, guid: 75389cd8162944c0e9b91bbc37971910, type: 3}
   suitSprites:
   - suit: 0
     sprite: {fileID: 21300000, guid: aee6e878259ea3c429e67a4cf0615929, type: 3}
