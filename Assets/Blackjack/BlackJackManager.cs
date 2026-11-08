@@ -40,6 +40,7 @@ public class BlackJackManager : MonoBehaviour
     public TextMeshProUGUI chipsText;
     public TextMeshProUGUI betText;
     public TextMeshProUGUI handsText;
+    public BetStack betStack;         // Optional: chips fly onto the table as the bet goes up
     
     private int chips;
     private int currentBet;
@@ -88,6 +89,7 @@ public class BlackJackManager : MonoBehaviour
         DisableUIText();
         statusText.text = "Place your bet";
         currentBet = 0;
+        if (betStack != null) betStack.Clear();
         playerHands.Clear();
 
         SetActionButtonsInteractable(false);
@@ -101,21 +103,27 @@ public class BlackJackManager : MonoBehaviour
     public void MaxBet()
     {
         if (!bettingPanel.activeSelf) return;
-        currentBet = Mathf.Min(currentBet + chips, chips);
-        UpdateBettingUI();
+        SetBet(Mathf.Min(currentBet + chips, chips));
     }
     // Hook chip buttons up to this with the chip value as the argument
     public void AddToBet(int amount)
     {
         if (!bettingPanel.activeSelf) return;
-        currentBet = Mathf.Min(currentBet + amount, chips);
-        UpdateBettingUI();
+        SetBet(Mathf.Min(currentBet + amount, chips));
     }
 
     public void ClearBet()
     {
         if (!bettingPanel.activeSelf) return;
         currentBet = 0;
+        if (betStack != null) betStack.Clear();
+        UpdateBettingUI();
+    }
+
+    void SetBet(int bet)
+    {
+        if (betStack != null) betStack.Add(bet - currentBet);
+        currentBet = bet;
         UpdateBettingUI();
     }
 
@@ -504,6 +512,8 @@ public class BlackJackManager : MonoBehaviour
 
         PlayerHand hand = ActiveHand;
         chips -= hand.Bet;
+        // The rack is hidden mid-hand, so the extra chips come from the chip count
+        if (betStack != null) betStack.Add(hand.Bet, chipsText.transform);
         hand.Bet *= 2;
         hand.IsDoubled = true;
         UpdateBettingUI();
