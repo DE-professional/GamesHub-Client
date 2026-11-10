@@ -148,6 +148,8 @@ public class GameManager : MonoBehaviour
     private AppListContainer _cachedAppList;
     private string _appListPath;
     [SerializeField] private GameObject winWrapper;
+    private string date;
+    private System.Random random;
 
     private void Awake()
     {
@@ -175,8 +177,9 @@ public class GameManager : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private async void Start()
     {
+        date = DailyPuzzle.TodayUtc();
+        random = new System.Random(DailyPuzzle.Seed("price-is-nice", date));
         triesRemaining = 3;
-        
         loadingText.gameObject.SetActive(true);
         _cachedAppList = new AppListContainer();
         _appListPath =  Application.persistentDataPath + "/applist.json";
@@ -305,6 +308,11 @@ public class GameManager : MonoBehaviour
     {
         
         var rand = new System.Random();
+        //actual price 4.99
+        // maxPrice[1st try] = 4.99 * 2.5 = 12.475
+        // minPrice[1st try] = 4.99 / 2.5 = 1.996
+        // minDifference = 4.99 * 0.05 = 0.2495
+        // appx = random * (12.475 - 1.996) + 1.996
         var maxPrice = actualPrice * difficultyList[triesRemaining - 1];
         var minPrice = actualPrice / difficultyList[triesRemaining - 1];
         var minDifference = actualPrice * 0.05;
@@ -358,7 +366,7 @@ public class GameManager : MonoBehaviour
 
         while (true)
         {
-            var randomIndex = Random.Range(0, _cachedAppList.appList.Count);
+            var randomIndex = random.Next(0, _cachedAppList.appList.Count);
             var chosenApp = _cachedAppList.appList[randomIndex];
             var gameData = await FetchAppDetailsAsync(chosenApp.appId);
             if (gameData == null)
