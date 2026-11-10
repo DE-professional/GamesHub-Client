@@ -23,7 +23,7 @@ public class SuccessText : MonoBehaviour
         string def = "Logged in as ";
         if (session != null)
         {
-            text.SetText(def + session.displayName);
+            text.SetText(def + session.user.displayName);
         }
         else
         {

@@ -10,6 +10,7 @@ namespace Util
     {
         /// <summary>The game-wide <see cref="AuthService"/>. Safe to use from <c>Awake</c> onward.</summary>
         public static AuthService Auth {get; private set;}
+        
 
         /// <summary>
         /// Builds the shared <see cref="ApiClient"/> and the services that use it. Called by
