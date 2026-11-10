@@ -11,11 +11,15 @@ public class RunnerSpawner : MonoBehaviour
     // Below 1 so there's still airtime to clear the obstacle's width.
     [Range(0.3f, 0.95f)] public float maxJumpFraction = 0.75f;
 
-    private float timer;
+    private double timer;
     private float jumpApex;
+    private string date;
+    private System.Random random;
 
     void Start()
     {
+        date = DailyPuzzle.TodayUtc();
+        random = new System.Random(DailyPuzzle.Seed("runner",date));
         timer = maxInterval;
         if (player == null) player = FindFirstObjectByType<RunnerPlayer>();
         if (player != null) jumpApex = player.JumpApexHeight;
@@ -31,7 +35,7 @@ public class RunnerSpawner : MonoBehaviour
 
         // The prefab's own root position is an offset from the spawner, so
         // overhead obstacles can sit higher than ground ones
-        var prefab = obstaclePrefabs[Random.Range(0, obstaclePrefabs.Length)];
+        var prefab = obstaclePrefabs[random.Next(0, obstaclePrefabs.Length)];
         var obstacle = Instantiate(prefab, transform.position + prefab.transform.position, Quaternion.identity);
 
         if (obstacle.randomHeight)
@@ -44,6 +48,6 @@ public class RunnerSpawner : MonoBehaviour
         // Keep gaps roughly constant in distance as speed ramps up
         var m = RunnerManager.Instance;
         float speedFactor = m.startSpeed / m.Speed;
-        timer = Random.Range(minInterval, maxInterval) * Mathf.Max(0.5f, speedFactor);
+        timer = ((random.NextDouble() * maxInterval) + minInterval) * Mathf.Max(0.5f, speedFactor);
     }
 }
