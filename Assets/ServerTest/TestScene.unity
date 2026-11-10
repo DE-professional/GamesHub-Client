@@ -396,9 +396,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 1183863557}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 45763512d257462a91a9d1256ed87de3, type: 3}
+  m_Script: {fileID: 11500000, guid: 204f5647a5e144cf38edb8276a04f523, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ApiClientSmokeTest
+  m_EditorClassIdentifier: Assembly-CSharp::AuthSmokeTest
+  email: test1@example.com
+  password: correct-horse-battery
+  logoutAtEnd: 0
 --- !u!1 &1535492006
 GameObject:
   m_ObjectHideFlags: 0

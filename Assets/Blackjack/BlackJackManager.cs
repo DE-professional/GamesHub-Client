@@ -68,8 +68,13 @@ public class BlackJackManager : MonoBehaviour
     private Card dealerHoleCard;
     private bool isHoleCardHidden = false;
 
+    private string date;
+    private System.Random random;
+
     private void Start()
     {
+        date = DailyPuzzle.TodayUtc();
+        random = new System.Random(DailyPuzzle.Seed("blackjack", date));
         if (splitHandContainer == null)
             Debug.LogWarning("BlackJackManager: splitHandContainer is not assigned, so splitting is disabled.", this);
 
@@ -396,7 +401,7 @@ public class BlackJackManager : MonoBehaviour
         for (int i = 0; i < deck.Count; i++)
         {
             Card temp = deck[i];
-            int randomIndex = Random.Range(i, deck.Count);
+            int randomIndex = random.Next(i, deck.Count);
             deck[i] = deck[randomIndex];
             deck[randomIndex] = temp;
         }
