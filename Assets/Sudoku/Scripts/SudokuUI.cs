@@ -22,11 +22,14 @@ public class SudokuUI : MonoBehaviour
     private int mistakes = 0;
     private float timer = 0;
     private bool notesMode = false;
-
+    public static string date = DailyPuzzle.TodayUtc();
+    public SudokuGenerator sudokuGenerator;
+    
     void Start()
     {
-        int[,] answer = SudokuGenerator.sudokuAnswerGenerator();
-        int[,] starting = SudokuGenerator.sudokuPuzzleGenerator(answer, 40);
+        sudokuGenerator = new SudokuGenerator();
+        int[,] answer = sudokuGenerator.sudokuAnswerGenerator();
+        int[,] starting = sudokuGenerator.sudokuPuzzleGenerator(answer, 40);
 
         board.LoadPuzzle(answer, starting);
         BuildGrid();
