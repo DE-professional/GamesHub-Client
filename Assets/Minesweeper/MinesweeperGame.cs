@@ -30,6 +30,9 @@ public class MinesweeperGame : MonoBehaviour
     private bool gameStarted = false;
     private float timer = 0f;
     private int flagsRemaining;
+    
+    private string date;
+    private System.Random random;
 
     // Struct to hold individual cell data
     private class Cell
@@ -47,6 +50,8 @@ public class MinesweeperGame : MonoBehaviour
     
     void Start()
     {
+        date = DailyPuzzle.TodayUtc();
+        random = new System.Random(DailyPuzzle.Seed("minesweeper",  date));
         if (titlePanel != null)
         {
             titlePanel.SetActive(true);
@@ -56,7 +61,7 @@ public class MinesweeperGame : MonoBehaviour
             StartGame();
         }
         if (returnToMenuButton != null) returnToMenuButton.SetActive(false);
-        mineCount = UnityEngine.Random.Range (minMines, maxMines);
+        mineCount = random.Next(minMines, maxMines);
         flagsRemaining = mineCount;
         
         UpdateFlagText();
@@ -163,8 +168,8 @@ public class MinesweeperGame : MonoBehaviour
         int placed = 0;
         while (placed < mineCount)
         {
-            int rx = UnityEngine.Random.Range(0, width);
-            int ry = UnityEngine.Random.Range(0, height);
+            int rx = random.Next(0, width);  
+            int ry = random.Next(0, height);
 
             // Don't place mine on or immediately around the first click
             if (Mathf.Abs(rx - firstX) <= 1 && Mathf.Abs(ry - firstY) <= 1) continue;
