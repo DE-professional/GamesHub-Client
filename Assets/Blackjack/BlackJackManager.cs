@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Util;
 using Random = UnityEngine.Random;
@@ -32,6 +33,7 @@ public class BlackJackManager : MonoBehaviour
     public Button splitButton;
     public Button startNewGameButton;
     public Button returnToMenuButton; // Shown once the session is over
+    public Button cashOutButton;      // Shown between hands: ends the day early, keeping the current chips as the score
 
     [Header("Betting")]
     public int startingChips = 500;   // Daily allowance
@@ -46,6 +48,9 @@ public class BlackJackManager : MonoBehaviour
     private int chips;
     private int currentBet;
     private int handsPlayed;
+    private bool cashedOut;
+
+    const string MenuScenePath = "Assets/MainMenu/MainMenu.unity";
     
     private class PlayerHand
     {
@@ -78,6 +83,8 @@ public class BlackJackManager : MonoBehaviour
         random = new System.Random(DailyPuzzle.Seed(GameIds.Blackjack.Slug, date));
         if (splitHandContainer == null)
             Debug.LogWarning("BlackJackManager: splitHandContainer is not assigned, so splitting is disabled.", this);
+        // Wired here, so don't also add CashOut to the button's OnClick in the Inspector.
+        if (cashOutButton != null) cashOutButton.onClick.AddListener(CashOut);
 
         StartNewSession();
     }
@@ -103,6 +110,7 @@ public class BlackJackManager : MonoBehaviour
         if (returnToMenuButton != null) returnToMenuButton.gameObject.SetActive(false);
         bettingPanel.SetActive(true);
         dealButton.gameObject.SetActive(true);
+        if (cashOutButton != null) cashOutButton.gameObject.SetActive(true);
         UpdateBettingUI();
     }
 
@@ -142,8 +150,25 @@ public class BlackJackManager : MonoBehaviour
         if (handsPlayed == 1) Services.Scores.MarkAttemptStarted(GameIds.Blackjack, date);
         bettingPanel.SetActive(false);
         dealButton.gameObject.SetActive(false);
+        if (cashOutButton != null) cashOutButton.gameObject.SetActive(false);
         UpdateBettingUI();
         StartCoroutine(StartNewGameSequence());
+    }
+
+    // Ends the day early: the current chips become the score, then back to the main menu.
+    // Only between hands, while betting is open: bets are deducted on deal, so `chips` is final
+    // here, and a chosen but undealt bet is still the player's.
+    public void CashOut()
+    {
+        if (cashedOut || !bettingPanel.activeSelf) return;
+        cashedOut = true;
+
+        // Cashing out before the first hand still uses up the day.
+        Services.Scores.MarkAttemptStarted(GameIds.Blackjack, date);
+        // Not awaited: ScoreService finishes (or queues) the submission after the scene changes,
+        // so a slow server doesn't hold the player here.
+        SubmitScore(ScoreFormulas.Blackjack(chips));
+        SceneManager.LoadScene(MenuScenePath);
     }
 
     public void OnNextHandButtonClicked()
