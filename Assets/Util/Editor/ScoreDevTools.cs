@@ -21,7 +21,7 @@ static class ScoreDevTools
         // In Play mode, update the menu's greyed-out slots right away.
         if (EditorApplication.isPlaying)
         {
-            MainMenu menu = Object.FindFirstObjectByType<MainMenu>();
+            MainMenu menu = Object.FindAnyObjectByType<MainMenu>();
             if (menu != null) menu.RefreshPlayedSlots();
         }
 

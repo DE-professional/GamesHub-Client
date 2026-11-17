@@ -4,9 +4,9 @@ using Util;
 /// <summary>Temporary: exercises restore, login, and logout against the local server. Delete after piece 2.</summary>
 public class AuthSmokeTest : MonoBehaviour
 {
-    // Local test account only (@example.com). Don't commit a scene with these filled in.
+    // Local test account only (@example.com). The password comes from EditorPrefs:
+    // GamesHub → Test Account Password…
     [SerializeField] string email = "test1@example.com";
-    [SerializeField] string password = "";
     [SerializeField] bool logoutAtEnd;
 
     async void Start()
@@ -18,7 +18,7 @@ public class AuthSmokeTest : MonoBehaviour
 
         if (!Services.Auth.IsLoggedIn && restore != RestoreResult.NetworkError)
         {
-            LoginResult login = await Services.Auth.LoginAsync(email, password);
+            LoginResult login = await Services.Auth.LoginAsync(email, TestCredentials.Password);
             Debug.Log($"Login: {login}");
         }
 

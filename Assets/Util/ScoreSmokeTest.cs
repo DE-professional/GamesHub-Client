@@ -28,11 +28,15 @@ public class ScoreSmokeTest : MonoBehaviour
 {
     enum Mode { Online, QueueSubmit, QueueFlush, Guest }
 
+    [Tooltip("Online: server running.\n" +
+             "QueueSubmit: server STOPPED; queues a score.\n" +
+             "QueueFlush: server running; sends the score QueueSubmit queued, so run QueueSubmit first.\n" +
+             "Guest: logs out, then tests device-only scores.")]
     [SerializeField] Mode mode = Mode.Online;
 
-    // Local test account only (@example.com). Don't commit a scene with these filled in.
+    // Local test account only (@example.com). The password comes from EditorPrefs:
+    // GamesHub → Test Account Password…
     [SerializeField] string email = "test1@example.com";
-    [SerializeField] string password = "";
 
     [Tooltip("Online and Guest modes submit for this game. Pick one you aren't playing today.")]
     [SerializeField] string onlineSlug = "runner";
@@ -131,13 +135,25 @@ public class ScoreSmokeTest : MonoBehaviour
 
     async Awaitable RunQueueFlush()
     {
+        GameId game = Find(queueSlug);
+        string today = DailyPuzzle.TodayUtc();
+
+        // Checked before logging in: the restore starts sending the queue straight away.
+        bool queued = Services.Scores.HasPendingScore(game, today);
+        Check($"a {game.Slug} score for today is queued", queued);
+        if (!queued)
+        {
+            Debug.LogError("Nothing to send. Run QueueSubmit first (server stopped), then QueueFlush " +
+                           "(server running). Reset Played State also empties the queue.");
+            return;
+        }
+
         // The restore raises SessionChanged, which starts sending the queue in the background.
         if (!await EnsureLoggedIn()) return;
         await Services.Scores.FlushPendingAsync(); // returns at once if that send is still running
         await Awaitable.WaitForSecondsAsync(2f);
 
-        GameId game = Find(queueSlug);
-        string today = DailyPuzzle.TodayUtc();
+        Check("queue is empty after sending", !Services.Scores.HasPendingScore(game, today));
         HistoryResult history = await Services.Scores.GetHistoryAsync(game);
         Check("history loads", history.Outcome, HistoryOutcome.Success);
         ScoreRecord todays = history.Scores.FirstOrDefault(s => s.puzzleDate == today);
@@ -194,10 +210,16 @@ public class ScoreSmokeTest : MonoBehaviour
     {
         RestoreResult restore = await Services.Auth.RestoreAsync();
         Debug.Log($"Restore: {restore}");
-        if (!Services.Auth.IsLoggedIn && restore != RestoreResult.NetworkError && !string.IsNullOrEmpty(password))
+        string password = TestCredentials.Password;
+        if (!Services.Auth.IsLoggedIn && restore != RestoreResult.NetworkError)
         {
-            LoginResult login = await Services.Auth.LoginAsync(email, password);
-            Debug.Log($"Login: {login}");
+            if (string.IsNullOrEmpty(password))
+                Debug.LogWarning("No test password set: GamesHub → Test Account Password…");
+            else
+            {
+                LoginResult login = await Services.Auth.LoginAsync(email, password);
+                Debug.Log($"Login: {login}");
+            }
         }
 
         Check("logged in", Services.Auth.IsLoggedIn);

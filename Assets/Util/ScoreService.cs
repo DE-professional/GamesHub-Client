@@ -134,6 +134,10 @@ public class ScoreService : IScoreStore
     /// <summary>Deletes every guest score on the device. Call when a guest registers.</summary>
     public void DiscardGuestScores() => local.DiscardAll();
 
+    /// <summary>Whether a score for this game and day is waiting in the queue to be sent.</summary>
+    public bool HasPendingScore(GameId game, string puzzleDate) =>
+        LoadPending().items.Exists(p => p.slug == game.Slug && p.puzzleDate == puzzleDate);
+
     /// <summary>
     /// Development only: forgets everything on this device that marks a puzzle as played, for every
     /// game: attempt marks, queued scores (which are lost, not sent) and guest scores. The saved login
