@@ -513,7 +513,8 @@ Temporary scripts for checking the layer against a local server. Add one to an e
 - **Main thread.** Continuations after `await` resume on Unity's main thread, so handlers for `SessionChanged` and code after `await` can touch GameObjects. Check `this == null` after an await in a MonoBehaviour.
 - **JsonUtility limits.** Bodies and responses must be `[Serializable]` classes or structs with public (or `[SerializeField]`) fields. Properties, dictionaries and top-level arrays are not supported; wrap arrays as `{ "items": [...] }`. A JSON `null` string may read back as `""`, so test with `string.IsNullOrEmpty`.
 - **Shape mismatches are silent.** JSON fields missing from the response keep their default values and unknown fields are ignored. A renamed field on the server shows up as `null` or 0, not as `ParseError`.
-- **Plain HTTP.** Unity blocks `http://` URLs unless *Player Settings → Other Settings → Allow downloads over HTTP* permits them. WebGL builds can only use an HTTPS API with CORS, which the backend doesn't have yet.
+- **Plain HTTP.** Unity blocks `http://` URLs unless *Player Settings → Other Settings → Allow downloads over HTTP* permits them.
+- **WebGL and CORS.** In a WebGL build the browser makes the requests, and only allows them if the backend lists the page's origin in `CORS_ORIGINS` (see the backend README, "WebGL builds and CORS"). For a local *Build and Run*, set `CORS_ALLOW_LOCALHOST=true` on the local server. A hosted build is served over `https` and can only call an `https` API. The Editor needs none of this.
 - **Timeout.** Each request gives up after 15 seconds and returns `NetworkError`.
 - **Scores are client-reported.** The server trusts them; anything the client computes can be faked.
 
