@@ -55,16 +55,18 @@ Pass `authenticate: false` for endpoints that must never see the current token, 
 
 All four public methods call the private `Send<T>(method, path, body, authenticate)`, which:
 
-1. Creates a `UnityWebRequest` with a `DownloadHandlerBuffer` and a 15-second timeout.
-2. If `body` is not null, serializes it with `JsonUtility.ToJson`, encodes it as UTF-8 and sets `Content-Type: application/json`.
-3. If `authenticate` is true and `AuthToken` is non-empty, adds the `Authorization` header and remembers the token it sent (`sentToken`).
-4. Awaits the request, then maps the result using the table below.
-5. On an HTTP error, reads `error.code` from the server's error body into `ErrorCode`.
-6. On success with a non-empty body, parses it with `JsonUtility.FromJson<T>`. An `ArgumentException` from the parser is logged as a warning and returned as `ParseError`.
+1. If `authenticate` is true and `AuthToken` is non-empty, remembers that token as `sentToken`.
+2. Builds the request in `CreateRequest`: a `UnityWebRequest` with a `DownloadHandlerBuffer` and a 15-second timeout. If `body` is not null, it is serialized with `JsonUtility.ToJson`, encoded as UTF-8 and sent with `Content-Type: application/json`. If there is a `sentToken`, it goes in the `Authorization` header.
+3. Awaits the request, then maps the result using the table below.
+4. On an HTTP error, reads `error.code` from the server's error body into `ErrorCode`.
+5. On success with a non-empty body, parses it with `JsonUtility.FromJson<T>`. An `ArgumentException` from the parser is logged as a warning and returned as `ParseError`.
+
+No exception escapes except `OperationCanceledException`, for example when Play mode ends mid-request. An exception while building the request is a client bug, such as a body `JsonUtility` can't serialize or a header with invalid characters. An exception from `SendWebRequest` usually means the request was blocked before it went out, such as Unity's "Insecure connection not allowed" for `http://` URLs. Both are logged with `Debug.LogError` and returned as `NetworkError`.
 
 | Condition | Outcome | Status | Data | ErrorCode |
 | --- | --- | --- | --- | --- |
 | `ConnectionError` (no connection, DNS failure, timeout) | `NetworkError` | 0 | default | null |
+| Exception while building or sending (logged as an error) | `NetworkError` | 0 | default | null |
 | Any other failed result (HTTP 4xx/5xx, data-processing error) | `HttpError` | response code | default | `error.code`, or null |
 | Success, empty body | `Success` | response code | `default(T)` | null |
 | Success, body parses | `Success` | response code | parsed `T` | null |
@@ -111,7 +113,7 @@ A `readonly struct` holding one response. Its constructor is private; instances 
 | --- | --- |
 | `Success` | The server answered 2xx and the body, if any, parsed. |
 | `HttpError` | The server answered with an error code, or Unity could not process the response. |
-| `NetworkError` | No response arrived: offline, DNS failure, refused connection or timeout. |
+| `NetworkError` | No response arrived: offline, DNS failure, refused connection, timeout, or the request couldn't be built or sent (logged as an error). |
 | `ParseError` | The server answered 2xx but the body was not valid JSON. |
 
 ## AuthService
@@ -484,15 +486,15 @@ Most severe first.
 
 | # | Issue | Effect | Fix |
 | --- | --- | --- | --- |
-| 1 | `Send` catches nothing around `SendWebRequest`. | Exceptions such as Unity's insecure-HTTP block escape from `LoginAsync`, `SubmitAsync` and the others instead of becoming a result. In a game's `async void SubmitScore`, that is an unhandled exception and the score is lost. | Wrap the send in `try/catch` and return `Network()`. |
-| 2 | Games don't check `GetPlayedStatusAsync` before starting. | The attempt mark is written, but nothing blocks a replay. Later submissions are rejected as `AlreadySubmitted`, but the player can still play again. | Each game checks the status on its title screen and decides what to show for `Played` and `Unknown`. |
-| 3 | Queued scores with an empty tag (earned before a saved login was restored) go to the first account that logs in. | If a different account logs in on that device, it gets the score. Rare. | Store the saved token's user tag in PlayerPrefs at login and use it for queued scores. |
-| 4 | The attempt mark is per device, not per account. | After a guest plays, an account on the same device is told the puzzle was already played, and the reverse. | Key the mark by account tag (`"guest"` for guests) if this matters. |
-| 5 | Every non-401 login error maps to `ServerError`. | A rate-limited login (429) or validation error (400) reads to the player as "server down". | Add `LoginResult` values for the codes the backend actually returns. |
-| 6 | `DataProcessingError` is reported as `HttpError`. | `Status` can be 200 on an `HttpError`, which is misleading. | Map it to `ParseError` or a new outcome. |
-| 7 | The base URL is hard-coded to `http://localhost:3900`. | Builds can only reach a server on the player's own machine. | Read it from a `ScriptableObject` or set it per build configuration. |
-| 8 | Queued scores are not included in `GetHistoryAsync`. | A score played offline appears in history only after it is sent. | Merge pending scores into the result, or show them separately as "not yet sent". |
-| 9 | Minesweeper's "Daily Best" and Runner's "Best" are kept separately in PlayerPrefs; Minesweeper's uses local time. | They can disagree with the server's history, and Minesweeper's resets at local midnight instead of UTC midnight. | Show the best from `GetHistoryAsync` instead. |
-| 10 | Minor style: `Services` is in `Util` while the other types are global; `init` is lowercase; the doc comment for `Send` sits above `ReadErrorCode` in `ApiClient.cs`. | Inconsistent with C# conventions; the IDE shows the wrong summary. | Put all the files in one namespace; rename to `Init`; move the comment back above `Send`. |
+| 1 | Games don't check `GetPlayedStatusAsync` before starting. | The attempt mark is written, but nothing blocks a replay. Later submissions are rejected as `AlreadySubmitted`, but the player can still play again. | Each game checks the status on its title screen and decides what to show for `Played` and `Unknown`. |
+| 2 | Queued scores with an empty tag (earned before a saved login was restored) go to the first account that logs in. | If a different account logs in on that device, it gets the score. Rare. | Store the saved token's user tag in PlayerPrefs at login and use it for queued scores. |
+| 3 | The attempt mark is per device, not per account. | After a guest plays, an account on the same device is told the puzzle was already played, and the reverse. | Key the mark by account tag (`"guest"` for guests) if this matters. |
+| 4 | Every non-401 login error maps to `ServerError`. | A rate-limited login (429) or validation error (400) reads to the player as "server down". | Add `LoginResult` values for the codes the backend actually returns. |
+| 5 | `DataProcessingError` is reported as `HttpError`. | `Status` can be 200 on an `HttpError`, which is misleading. | Map it to `ParseError` or a new outcome. |
+| 6 | The base URL is hard-coded to `http://localhost:3900`. | Builds can only reach a server on the player's own machine. | Read it from a `ScriptableObject` or set it per build configuration. |
+| 7 | Queued scores are not included in `GetHistoryAsync`. | A score played offline appears in history only after it is sent. | Merge pending scores into the result, or show them separately as "not yet sent". |
+| 8 | Minesweeper's "Daily Best" and Runner's "Best" are kept separately in PlayerPrefs; Minesweeper's uses local time. | They can disagree with the server's history, and Minesweeper's resets at local midnight instead of UTC midnight. | Show the best from `GetHistoryAsync` instead. |
+| 9 | A build or send exception reads as `NetworkError`. | A client bug, such as an unserializable body, looks like being offline to the caller. `ScoreService` queues the score and retries it on every flush until its day closes. The error log is the only signal. | Add an `ApiOutcome` for client-side failures if this ever hides a real bug. |
+| 10 | Minor style: `Services` is in `Util` while the other types are global; `init` is lowercase. | Inconsistent with C# conventions. | Put all the files in one namespace; rename to `Init`. |
 
-Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); and logout reaches the server (`LogoutAsync`).
+Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); logout reaches the server (`LogoutAsync`); exceptions from building or sending a request become `NetworkError` instead of escaping (Nov 17); and `Send`'s doc comment is back above `Send`.

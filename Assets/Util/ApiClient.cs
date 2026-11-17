@@ -142,21 +142,6 @@ public class ApiClient
     public Awaitable<ApiResult<T>> Delete<T>(string path, bool authenticate = true) => Send<T>("DELETE", path, null, authenticate);
     
     /// <summary>
-    /// Builds, sends, and interprets one request. Shared by all public request methods.
-    /// </summary>
-    /// <remarks>
-    /// Result mapping:
-    /// <list type="bullet">
-    /// <item><description>Connection error or timeout → <see cref="ApiOutcome.NetworkError"/>, status 0.</description></item>
-    /// <item><description>Any other failed result (4xx/5xx, data-processing error) → <see cref="ApiOutcome.HttpError"/>.
-    /// A 401 on a request that carried a token also raises <see cref="Unauthorized"/>.</description></item>
-    /// <item><description>Success with empty body → <see cref="ApiOutcome.Success"/>, <c>Data = default</c>.</description></item>
-    /// <item><description>Success with invalid JSON → <see cref="ApiOutcome.ParseError"/> (a warning is logged).</description></item>
-    /// <item><description>Success with valid JSON → <see cref="ApiOutcome.Success"/> with parsed data.</description></item>
-    /// </list>
-    /// Exceptions thrown by <see cref="UnityWebRequest.SendWebRequest"/> itself are not caught.
-    /// </remarks>
-    /// <summary>
     /// Extracts <c>error.code</c> from an error response body. Returns null for an empty body,
     /// non-JSON (e.g. an HTML page from a proxy), or JSON without that field.
     /// </summary>
@@ -173,22 +158,53 @@ public class ApiClient
             return null;
         }
     }
+
+    /// <summary>
+    /// Builds, sends, and interprets one request. Shared by all public request methods.
+    /// </summary>
+    /// <remarks>
+    /// Result mapping:
+    /// <list type="bullet">
+    /// <item><description>Connection error or timeout → <see cref="ApiOutcome.NetworkError"/>, status 0.</description></item>
+    /// <item><description>The request couldn't be built or sent (an exception, e.g. Unity's insecure-HTTP block) →
+    /// <see cref="ApiOutcome.NetworkError"/>, status 0, with the exception logged as an error.</description></item>
+    /// <item><description>Any other failed result (4xx/5xx, data-processing error) → <see cref="ApiOutcome.HttpError"/>.
+    /// A 401 on a request that carried the current token also raises <see cref="Unauthorized"/>.</description></item>
+    /// <item><description>Success with empty body → <see cref="ApiOutcome.Success"/>, <c>Data = default</c>.</description></item>
+    /// <item><description>Success with invalid JSON → <see cref="ApiOutcome.ParseError"/> (a warning is logged).</description></item>
+    /// <item><description>Success with valid JSON → <see cref="ApiOutcome.Success"/> with parsed data.</description></item>
+    /// </list>
+    /// <see cref="OperationCanceledException"/> (e.g. leaving Play mode mid-request) is not caught.
+    /// </remarks>
     async Awaitable<ApiResult<T>> Send<T>(string method, string path, object body, bool authenticate = true)
     {
-        using var req = new UnityWebRequest(baseUrl + path, method);
-        req.downloadHandler = new DownloadHandlerBuffer();
-        req.timeout = 15;
+        string sentToken = authenticate && !string.IsNullOrEmpty(AuthToken) ? AuthToken : null;
 
-        if (body != null)
+        UnityWebRequest built;
+        try
         {
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(JsonUtility.ToJson(body)));
-            req.SetRequestHeader("Content-Type", "application/json");
+            built = CreateRequest(method, path, body, sentToken);
+        }
+        catch (Exception e)
+        {
+            // A client bug: a body JsonUtility can't serialize, or a header with invalid characters.
+            Debug.LogError($"{method} {path} could not be built: {e.GetType().Name}: {e.Message}");
+            return ApiResult<T>.Network();
         }
 
-        string sentToken  = authenticate && !string.IsNullOrEmpty(AuthToken) ? AuthToken : null;
-        if (sentToken != null) req.SetRequestHeader("Authorization", "Bearer " + sentToken);
-        
-        await req.SendWebRequest();
+        using var req = built;
+        try
+        {
+            await req.SendWebRequest();
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // e.g. InvalidOperationException "Insecure connection not allowed" for http:// URLs
+            // when Player Settings block them. No request went out, so it reads as a network error.
+            Debug.LogError($"{method} {path} could not be sent: {e.GetType().Name}: {e.Message}");
+            return ApiResult<T>.Network();
+        }
+
         if (req.result == UnityWebRequest.Result.ConnectionError)
             return ApiResult<T>.Network();
 
@@ -220,5 +236,30 @@ public class ApiClient
             }
         }
         return ApiResult<T>.Success(req.responseCode, data);
+    }
+
+    /// <summary>Creates the request with its body and headers. Throws on invalid input; <see cref="Send{T}"/> catches.</summary>
+    UnityWebRequest CreateRequest(string method, string path, object body, string sentToken)
+    {
+        var req = new UnityWebRequest(baseUrl + path, method);
+        try
+        {
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.timeout = 15;
+
+            if (body != null)
+            {
+                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(JsonUtility.ToJson(body)));
+                req.SetRequestHeader("Content-Type", "application/json");
+            }
+
+            if (sentToken != null) req.SetRequestHeader("Authorization", "Bearer " + sentToken);
+            return req;
+        }
+        catch
+        {
+            req.Dispose();
+            throw;
+        }
     }
 }
