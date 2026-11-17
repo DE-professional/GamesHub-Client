@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Util;
 
 public class MainMenu : MonoBehaviour
 {
@@ -16,6 +17,10 @@ public class MainMenu : MonoBehaviour
     [Header("Game slot scenes (scene names must be added to Build Settings)")]
     public List<string> gameSceneNames = new List<string>();
 
+    [Header("Game slot slugs (same order as the scenes; see GameIds)")]
+    [Tooltip("Used to grey out a game whose daily puzzle was already played. A blank or unknown slug is never greyed out.")]
+    public List<string> gameSlugs = new List<string> { "price-is-nice", "blackjack", "runner", "minesweeper", "sudoku" };
+
     [Header("Look")]
     public RetroTheme theme;
 
@@ -24,6 +29,8 @@ public class MainMenu : MonoBehaviour
 
     private GameObject mainPanel;
     private GameObject gamesPanel;
+    private readonly List<Button> slotButtons = new List<Button>();
+    private int refreshVersion; // a newer refresh makes older, still-running ones discard their results
 
     private void Awake()
     {
@@ -35,6 +42,25 @@ public class MainMenu : MonoBehaviour
         gamesPanel = BuildGamesPanel(root);
         ShowMain();
     }
+
+    private void OnEnable()  => Services.Auth.SessionChanged += OnSessionChanged;
+    private void OnDisable() => Services.Auth.SessionChanged -= OnSessionChanged;
+
+    private async void Start()
+    {
+        // Logs the player back in with the token saved by an earlier launch. The menu loads again
+        // after every game, so a restore that failed offline is retried then. Already logged in:
+        // returns at once without a request.
+        RestoreResult restore = await Services.Auth.RestoreAsync();
+        if (this == null) return;
+        if (restore != RestoreResult.Restored && restore != RestoreResult.NoSavedSession)
+            Debug.Log($"Session restore: {restore}");
+
+        // A successful restore already refreshed through SessionChanged; this covers the rest.
+        RefreshPlayedSlots();
+    }
+
+    private void OnSessionChanged(Session session) => RefreshPlayedSlots();
 
     // ---------- Button actions ----------
 
@@ -48,6 +74,30 @@ public class MainMenu : MonoBehaviour
     {
         mainPanel.SetActive(false);
         gamesPanel.SetActive(true);
+        RefreshPlayedSlots(); // the day may have changed since the menu loaded
+    }
+
+    // Greys out every game whose daily puzzle was already played. Unknown (offline, or a saved login
+    // not restored yet) stays playable: this device hasn't started today's puzzle, or the local mark
+    // would have said Played, and the server still refuses a second score for the day.
+    public async void RefreshPlayedSlots()
+    {
+        int version = ++refreshVersion;
+        string today = DailyPuzzle.TodayUtc();
+
+        for (int i = 0; i < slotButtons.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out GameId game))
+            {
+                slotButtons[i].interactable = true;
+                continue;
+            }
+
+            PlayedStatus status = await Services.Scores.GetPlayedStatusAsync(game, today);
+            if (this == null || version != refreshVersion) return;
+            slotButtons[i].interactable = status != PlayedStatus.Played;
+        }
     }
 
     private void OnScores()
@@ -147,8 +197,15 @@ public class MainMenu : MonoBehaviour
                 : $"Game {index + 1}";
             // Cycle the logo's palette across the slots
             Color[] faces = { theme.mustard, theme.coral, theme.orange };
-            RetroUI.Button($"Slot{i + 1}", grid.transform, theme, label, () => OnSelectGame(index), 36,
-                faces[i % faces.Length]);
+            slotButtons.Add(RetroUI.Button($"Slot{i + 1}", grid.transform, theme, label, () => OnSelectGame(index), 36,
+                faces[i % faces.Length]));
+        }
+
+        for (int i = 0; i < gameSceneNames.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out _))
+                Debug.LogWarning($"Slot {i + 1} ({gameSceneNames[i]}): slug '{slug}' is not in GameIds, so it is never greyed out.");
         }
 
         Button back = RetroUI.Button("BackButton", panel.transform, theme, "Back", ShowMain, 32, theme.cream);

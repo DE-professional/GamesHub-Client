@@ -29,7 +29,7 @@ The intended order of events at runtime:
 
 1. Before the first scene loads, `Services.init()` creates one `ApiClient` for `http://localhost:3900`, an `AuthService` around it, and a `ScoreService` built on both.
 2. The `AuthService` constructor subscribes `Logout` to `ApiClient.Unauthorized`. The `ScoreService` constructor subscribes to `AuthService.SessionChanged`.
-3. At startup, game code calls `Services.Auth.RestoreAsync()`. If a token was saved by an earlier launch, it is checked with `GET /auth/me`.
+3. When the main menu starts, `MainMenu` calls `Services.Auth.RestoreAsync()`. If a token was saved by an earlier launch, it is checked with `GET /auth/me`.
 4. If there is no saved session, the login screen calls `Services.Auth.LoginAsync(email, password)`, which sends `POST /auth/login`.
 5. A successful restore or login stores a `Session`, saves the token, and raises `SessionChanged`. `ScoreService` reacts by sending any scores queued while the player was offline.
 6. Games call `Services.Scores.MarkAttemptStarted` when play begins and `Services.Scores.SubmitAsync` when it ends.
@@ -228,7 +228,7 @@ Does nothing when logged out. Otherwise it sends `POST /auth/logout` with the to
 
 ### GameId and GameIds
 
-`GameId` is a `readonly struct` with `Slug` and `FormulaVersion`. `GameIds` holds one for each game, plus `GameIds.All`:
+`GameId` is a `readonly struct` with `Slug` and `FormulaVersion`. `GameIds` holds one for each game, plus `GameIds.All` and `GameIds.TryFind(slug, out GameId)`:
 
 | Field | Slug | Formula version |
 | --- | --- | --- |
@@ -328,6 +328,8 @@ It first drops scores whose date the server no longer accepts (older than the UT
 
 **Other members:** `DiscardGuestScores()` calls `LocalScoreStore.DiscardAll()`.
 
+**Main menu.** `MainMenu` refreshes each game slot's status when it starts (after `RestoreAsync`), when the games panel opens, and on every `SessionChanged`. A slot whose status is `Played` gets `interactable = false`, which `RetroButton` draws greyed out and sunk. `Unknown` stays playable. That status only happens when this device hasn't started today's puzzle and the server can't be asked; the server still refuses a second score for the day, and the queue drops it. Slots map to games through `MainMenu.gameSlugs`, which follows the order of `gameSceneNames`. A blank or unknown slug is logged once and never greyed out.
+
 ### PlayerPrefs keys
 
 | Key | Written by | Contents |
@@ -336,6 +338,8 @@ It first drops scores whose date the server no longer accepts (older than the UT
 | `GamesHub.PendingScores` | `ScoreService` | Queued scores, `{ "items": [...] }` |
 | `GamesHub.Attempt.<slug>` | `ScoreService` | The puzzle date of the last attempt started |
 | `GamesHub.GuestScores.<slug>` | `LocalScoreStore` | Guest scores for one game, `{ "items": [...] }` |
+
+To make games playable again during development, use *GamesHub → Reset Played State* in the Editor (`Editor/ScoreDevTools.cs`). It calls `ScoreService.ResetLocalPlayedState()`, which deletes the attempt marks, queued scores and guest scores but keeps `GamesHub.AuthToken`. In Play mode it also refreshes the main menu. A score already on the server still counts as played; delete it in the local database (the menu logs the SQL).
 
 ### DailyPuzzle
 
@@ -486,7 +490,7 @@ Most severe first.
 
 | # | Issue | Effect | Fix |
 | --- | --- | --- | --- |
-| 1 | Games don't check `GetPlayedStatusAsync` before starting. | The attempt mark is written, but nothing blocks a replay. Later submissions are rejected as `AlreadySubmitted`, but the player can still play again. | Each game checks the status on its title screen and decides what to show for `Played` and `Unknown`. |
+| 1 | Only the main menu restores the session and checks for replays. | A game scene opened directly (in the Editor) skips both, so it treats a saved login as not yet restored and lets a played puzzle start again. Builds always start at the menu. | Restore in `Services` at startup, and check the status on each game's title screen as well. |
 | 2 | Queued scores with an empty tag (earned before a saved login was restored) go to the first account that logs in. | If a different account logs in on that device, it gets the score. Rare. | Store the saved token's user tag in PlayerPrefs at login and use it for queued scores. |
 | 3 | The attempt mark is per device, not per account. | After a guest plays, an account on the same device is told the puzzle was already played, and the reverse. | Key the mark by account tag (`"guest"` for guests) if this matters. |
 | 4 | Every non-401 login error maps to `ServerError`. | A rate-limited login (429) or validation error (400) reads to the player as "server down". | Add `LoginResult` values for the codes the backend actually returns. |
@@ -497,4 +501,4 @@ Most severe first.
 | 9 | A build or send exception reads as `NetworkError`. | A client bug, such as an unserializable body, looks like being offline to the caller. `ScoreService` queues the score and retries it on every flush until its day closes. The error log is the only signal. | Add an `ApiOutcome` for client-side failures if this ever hides a real bug. |
 | 10 | Minor style: `Services` is in `Util` while the other types are global; `init` is lowercase. | Inconsistent with C# conventions. | Put all the files in one namespace; rename to `Init`. |
 
-Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); logout reaches the server (`LogoutAsync`); exceptions from building or sending a request become `NetworkError` instead of escaping (Nov 17); and `Send`'s doc comment is back above `Send`.
+Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); logout reaches the server (`LogoutAsync`); exceptions from building or sending a request become `NetworkError` instead of escaping (Nov 17); `Send`'s doc comment is back above `Send`; and the main menu restores the session and greys out games already played today.

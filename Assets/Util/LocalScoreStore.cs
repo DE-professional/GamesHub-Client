@@ -58,7 +58,10 @@ public class LocalScoreStore : IScoreStore
 #pragma warning restore CS1998
 
     /// <summary>Deletes every guest score on the device. Call when a guest registers.</summary>
-    public void DiscardAll()
+    public void DiscardAll() => DeleteAll();
+
+    /// <summary>Deletes every guest score on the device. Static for development tools that run outside Play mode.</summary>
+    public static void DeleteAll()
     {
         foreach (GameId game in GameIds.All) PlayerPrefs.DeleteKey(KeyPrefix + game.Slug);
         PlayerPrefs.Save();

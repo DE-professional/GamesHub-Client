@@ -35,4 +35,19 @@ public static class GameIds
     public static readonly GameId Runner      = new("runner", 1);
 
     public static readonly GameId[] All = { Minesweeper, Sudoku, PriceIsNice, Blackjack, Runner };
+
+    /// <summary>Finds a game by its slug. False for null, empty, or unknown slugs.</summary>
+    public static bool TryFind(string slug, out GameId game)
+    {
+        foreach (GameId g in All)
+        {
+            if (g.Slug == slug)
+            {
+                game = g;
+                return true;
+            }
+        }
+        game = default;
+        return false;
+    }
 }

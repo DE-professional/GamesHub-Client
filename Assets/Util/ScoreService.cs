@@ -135,6 +135,19 @@ public class ScoreService : IScoreStore
     public void DiscardGuestScores() => local.DiscardAll();
 
     /// <summary>
+    /// Development only: forgets everything on this device that marks a puzzle as played, for every
+    /// game: attempt marks, queued scores (which are lost, not sent) and guest scores. The saved login
+    /// is kept. Scores already on the server still count; delete those in the database.
+    /// Used by the <c>GamesHub → Reset Played State</c> Editor menu.
+    /// </summary>
+    public static void ResetLocalPlayedState()
+    {
+        foreach (GameId game in GameIds.All) PlayerPrefs.DeleteKey(AttemptKeyPrefix + game.Slug);
+        PlayerPrefs.DeleteKey(PendingKey);
+        LocalScoreStore.DeleteAll(); // also saves PlayerPrefs
+    }
+
+    /// <summary>
     /// Sends queued scores for the logged-in account. Runs automatically on login and after each
     /// submission; call it yourself only to retry sooner. Does nothing when logged out or
     /// already running.
