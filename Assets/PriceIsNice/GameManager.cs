@@ -103,14 +103,14 @@ public class GameManager : MonoBehaviour
         var scoreInfo = winWrapper.transform.GetChild(2).GetComponent<TextMeshProUGUI>();
         float timeTaken = timer.StopTimer();
 
-        gameInfo.text = $"{puzzle.Name} sells for\n<font=\"IBMPlexMono-SemiBold SDF\"><size=300%><color=#F2C14E>{puzzle.PriceFormatted}</color></size></font>";
+        gameInfo.text = $"{puzzle.Name} sells for\n<b><size=300%><color={PriceIsNiceRetroUI.HighlightColor}>{puzzle.PriceFormatted}</color></size></b>";
         _imageCarousel.gameObject.SetActive(false);
         priceIsNiceWrapper.SetActive(false);
 
         if (isWin)
         {
             int score = ScoreFormulas.PriceIsNice(triesRemaining, MaxTries, timeTaken);
-            scoreInfo.text = $"SCORE  <color=#EDEEF0>{score}</color>";
+            scoreInfo.text = $"SCORE  <color={PriceIsNiceRetroUI.ValueColor}>{score}</color>";
             SubmitScore(score);
         }
         else

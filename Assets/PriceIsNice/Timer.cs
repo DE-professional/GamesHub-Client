@@ -32,6 +32,6 @@ public class Timer : MonoBehaviour
         {
             _currTime += Time.deltaTime;
         }
-        text.text = "<size=40%><color=#8B909C>TIME</color></size>\n" + _currTime.ToString("F1") + "s";
+        text.text = $"<size=40%><color={PriceIsNiceRetroUI.LabelColor}>TIME</color></size>\n{_currTime:F1}s";
     }
 }
