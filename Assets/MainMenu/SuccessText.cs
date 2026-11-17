@@ -12,6 +12,9 @@ public class SuccessText : MonoBehaviour
     {
         Services.Auth.SessionChanged += OnSessionChanged;
 
+        // SessionChanged only reports changes. Coming back to the menu from a game, the player is
+        // still logged in and no event fires, so show the current state now.
+        OnSessionChanged(Services.Auth.Current);
     }
     void OnDisable()
     {
@@ -23,7 +26,7 @@ public class SuccessText : MonoBehaviour
         string def = "Logged in as ";
         if (session != null)
         {
-            text.SetText(def + session.user.displayName);
+            text.SetText(def + session.user.Tag); // full Name#1234: display names alone aren't unique
         }
         else
         {
