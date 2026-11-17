@@ -172,13 +172,14 @@ public class GameManager : MonoBehaviour
         OnApproxUpdated?.Invoke(approxPrice);
         OnGameOver += GameOver;
         timer.StartTimer();
+        Services.Scores.MarkAttemptStarted(GameIds.PriceIsNice, date);
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private async void Start()
     {
         date = DailyPuzzle.TodayUtc();
-        random = new System.Random(DailyPuzzle.Seed("price-is-nice", date));
+        random = new System.Random(DailyPuzzle.Seed(GameIds.PriceIsNice.Slug, date));
         triesRemaining = 3;
         loadingText.gameObject.SetActive(true);
         _cachedAppList = new AppListContainer();
@@ -248,23 +249,30 @@ public class GameManager : MonoBehaviour
         if (isWin)
         {
             //Hide everything else
-            var baseScore = 5000;
             var maxTries = 3;
-            var targetTime = 30f;
-            var score = baseScore * (1+((float)triesRemaining/maxTries)) * (targetTime / (targetTime + timeTaken));
+            int score = ScoreFormulas.PriceIsNice(triesRemaining, maxTries, timeTaken);
             //Display some text saying "You win! {Game name}'s actual price was {actual price}". 
             //Show your score (tries left * time taken)
-            scoreInfo.text = $"SCORE  <color=#EDEEF0>{Math.Round(score,0)}</color>";
+            scoreInfo.text = $"SCORE  <color=#EDEEF0>{score}</color>";
+            SubmitScore(score);
 
         }
         else
         {
             scoreInfo.SetText("");
             congratsText.SetText("Not this time.");
+            SubmitScore(ScoreFormulas.Loss);
             
         }
         winWrapper.gameObject.SetActive(true);
     }
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.PriceIsNice, date, score);
+        Debug.Log($"PriceIsNice score {score} for {date}: {result}");
+    }
+
     public void GuessHigher()
     {
         EvaluateGuess(actualPrice > approxPrice);

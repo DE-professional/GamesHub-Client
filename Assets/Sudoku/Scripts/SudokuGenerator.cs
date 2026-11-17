@@ -3,13 +3,12 @@ using System.Collections.Generic;
 
 public class SudokuGenerator
 {
-    private string date;
     private System.Random rand;
 
-    public SudokuGenerator()
+    /// <param name="puzzleDate">The UTC date from <see cref="DailyPuzzle.TodayUtc"/>; also the date the score is submitted for.</param>
+    public SudokuGenerator(string puzzleDate)
     {
-        date = DailyPuzzle.TodayUtc();
-        rand = new Random(DailyPuzzle.Seed("sudoku", date));
+        rand = new Random(DailyPuzzle.Seed(GameIds.Sudoku.Slug, puzzleDate));
     }
     public bool unUsedInBox(int[,] grid, int rowStart, int colStart, int num)
     {

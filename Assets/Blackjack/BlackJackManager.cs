@@ -5,6 +5,7 @@ using System.ComponentModel;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Util;
 using Random = UnityEngine.Random;
 
 public class BlackJackManager : MonoBehaviour
@@ -74,7 +75,7 @@ public class BlackJackManager : MonoBehaviour
     private void Start()
     {
         date = DailyPuzzle.TodayUtc();
-        random = new System.Random(DailyPuzzle.Seed("blackjack", date));
+        random = new System.Random(DailyPuzzle.Seed(GameIds.Blackjack.Slug, date));
         if (splitHandContainer == null)
             Debug.LogWarning("BlackJackManager: splitHandContainer is not assigned, so splitting is disabled.", this);
 
@@ -138,6 +139,7 @@ public class BlackJackManager : MonoBehaviour
 
         chips -= currentBet;
         handsPlayed++;
+        if (handsPlayed == 1) Services.Scores.MarkAttemptStarted(GameIds.Blackjack, date);
         bettingPanel.SetActive(false);
         dealButton.gameObject.SetActive(false);
         UpdateBettingUI();
@@ -620,6 +622,7 @@ public class BlackJackManager : MonoBehaviour
                 ? "\nYou're out of chips. Today's score: 0"
                 : $"\nDay over! You cash out {chips} chips.";
             if (returnToMenuButton != null) returnToMenuButton.gameObject.SetActive(true);
+            SubmitScore(ScoreFormulas.Blackjack(chips));
         }
         else
         {
@@ -627,6 +630,13 @@ public class BlackJackManager : MonoBehaviour
         }
 
         statusText.text = message;
+    }
+
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.Blackjack, date, score);
+        Debug.Log($"Blackjack score {score} for {date}: {result}");
     }
 
     // Pays out the bet (already deducted on deal) and returns the net change in chips for the hand

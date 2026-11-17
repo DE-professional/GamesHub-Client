@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
+using Util;
 using UnityEngine.SceneManagement;
 using System; // Required for DateTime
 
@@ -51,7 +52,7 @@ public class MinesweeperGame : MonoBehaviour
     void Start()
     {
         date = DailyPuzzle.TodayUtc();
-        random = new System.Random(DailyPuzzle.Seed("minesweeper",  date));
+        random = new System.Random(DailyPuzzle.Seed(GameIds.Minesweeper.Slug, date));
         if (titlePanel != null)
         {
             titlePanel.SetActive(true);
@@ -145,6 +146,7 @@ public class MinesweeperGame : MonoBehaviour
             if (!gameStarted)
             {
                 gameStarted = true;
+                Services.Scores.MarkAttemptStarted(GameIds.Minesweeper, date);
                 PlaceMines(x, y);
                 CalculateAdjacentMines();
                 RevealSafePatch(x, y);
@@ -252,6 +254,7 @@ public class MinesweeperGame : MonoBehaviour
         gameOver = true;
         Debug.Log("Game Over!");
         if (returnToMenuButton != null) returnToMenuButton.SetActive(true);
+        SubmitScore(ScoreFormulas.Loss);
         
         foreach (var cell in grid)
         {
@@ -277,7 +280,15 @@ public class MinesweeperGame : MonoBehaviour
             Debug.Log("You Win!");
             if (returnToMenuButton != null) returnToMenuButton.SetActive(true);
             SaveHighScore();
+            SubmitScore(ScoreFormulas.Minesweeper(timer));
         }
+    }
+
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.Minesweeper, date, score);
+        Debug.Log($"Minesweeper score {score} for {date}: {result}");
     }
 
     void UpdateFlagText()

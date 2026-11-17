@@ -13,13 +13,12 @@ public class RunnerSpawner : MonoBehaviour
 
     private double timer;
     private float jumpApex;
-    private string date;
     private System.Random random;
 
     void Start()
     {
-        date = DailyPuzzle.TodayUtc();
-        random = new System.Random(DailyPuzzle.Seed("runner",date));
+        // RunnerManager picks the date in Awake, so the seed and the submitted score share it.
+        random = new System.Random(DailyPuzzle.Seed(GameIds.Runner.Slug, RunnerManager.Instance.PuzzleDate));
         timer = maxInterval;
         if (player == null) player = FindFirstObjectByType<RunnerPlayer>();
         if (player != null) jumpApex = player.JumpApexHeight;

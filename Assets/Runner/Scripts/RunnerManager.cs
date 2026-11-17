@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using Util;
 
 public class RunnerManager : MonoBehaviour
 {
@@ -27,6 +28,9 @@ public class RunnerManager : MonoBehaviour
     public bool StartedThisFrame => startFrame == Time.frameCount;
 
     private float distance;
+
+    // The UTC puzzle date this run uses for its seed and its score. Set once, in Awake.
+    public string PuzzleDate { get; private set; }
     private int startFrame = -1;
 
     // Restarting goes straight back into a run instead of the title screen
@@ -39,6 +43,7 @@ public class RunnerManager : MonoBehaviour
     void Awake()
     {
         Instance = this;
+        PuzzleDate = DailyPuzzle.TodayUtc();
         Time.timeScale = 1f;
         Speed = startSpeed;
     }
@@ -63,6 +68,7 @@ public class RunnerManager : MonoBehaviour
         IsStarted = true;
         startFrame = Time.frameCount;
         if (titlePanel != null) titlePanel.SetActive(false);
+        Services.Scores.MarkAttemptStarted(GameIds.Runner, PuzzleDate);
     }
 
     void Update()
@@ -97,10 +103,18 @@ public class RunnerManager : MonoBehaviour
 
         int best = Mathf.Max(Score, PlayerPrefs.GetInt("RunnerBest", 0));
         PlayerPrefs.SetInt("RunnerBest", best);
+        SubmitScore(ScoreFormulas.Runner(Score));
 
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
         if (gameOverScoreLabel != null)
             gameOverScoreLabel.text = $"Score: {Score}\nBest: {best}\n\nPress Space to restart";
+    }
+
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.Runner, PuzzleDate, score);
+        Debug.Log($"Runner score {score} for {PuzzleDate}: {result}");
     }
 
     // Hook this up to a UI button too if you want one
