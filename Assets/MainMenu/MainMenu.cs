@@ -27,8 +27,13 @@ public class MainMenu : MonoBehaviour
     [Tooltip("Where the menu is built, under the scene's logo. Left empty, a standalone canvas is created.")]
     public RectTransform menuRoot;
 
+    [Tooltip("Hidden while the Scores screen is open, so the score list can use their space. " +
+             "Left empty, the objects named \"GamesHub Title\" and \"SuccessText\" are used.")]
+    public List<GameObject> hiddenOnScoresScreen = new List<GameObject>();
+
     private GameObject mainPanel;
     private GameObject gamesPanel;
+    private ScoreHistoryPanel scoresPanel;
     private readonly List<Button> slotButtons = new List<Button>();
     private int refreshVersion; // a newer refresh makes older, still-running ones discard their results
 
@@ -40,6 +45,8 @@ public class MainMenu : MonoBehaviour
 
         mainPanel = BuildMainPanel(root);
         gamesPanel = BuildGamesPanel(root);
+        scoresPanel = BuildScoresPanel(root);
+        FindObjectsHiddenOnScores();
         ShowMain();
     }
 
@@ -68,12 +75,16 @@ public class MainMenu : MonoBehaviour
     {
         mainPanel.SetActive(true);
         gamesPanel.SetActive(false);
+        scoresPanel.Hide();
+        SetScoresScreenObjectsHidden(false);
     }
 
     private void ShowGames()
     {
         mainPanel.SetActive(false);
         gamesPanel.SetActive(true);
+        scoresPanel.Hide();
+        SetScoresScreenObjectsHidden(false);
         RefreshPlayedSlots(); // the day may have changed since the menu loaded
     }
 
@@ -102,7 +113,30 @@ public class MainMenu : MonoBehaviour
 
     private void OnScores()
     {
-        // nothing yet lol
+        mainPanel.SetActive(false);
+        gamesPanel.SetActive(false);
+        SetScoresScreenObjectsHidden(true);
+        scoresPanel.Show();
+    }
+
+    // Falls back to the scene's object names, so the scene needs no extra setup. GameObject.Find
+    // only sees active objects, which these are when the menu wakes.
+    private void FindObjectsHiddenOnScores()
+    {
+        hiddenOnScoresScreen.RemoveAll(go => go == null);
+        if (hiddenOnScoresScreen.Count > 0) return;
+        foreach (string name in new[] { "GamesHub Title", "SuccessText" })
+        {
+            GameObject go = GameObject.Find(name);
+            if (go != null) hiddenOnScoresScreen.Add(go);
+            else Debug.LogWarning($"MainMenu: no active object named '{name}' to hide on the Scores screen.");
+        }
+    }
+
+    private void SetScoresScreenObjectsHidden(bool hidden)
+    {
+        foreach (GameObject go in hiddenOnScoresScreen)
+            if (go != null) go.SetActive(!hidden);
     }
 
     private void OnQuit()
@@ -191,10 +225,7 @@ public class MainMenu : MonoBehaviour
         for (int i = 0; i < gameSceneNames.Count; i++)
         {
             int index = i; // capture for closure
-            string label = (gameDisplayNames != null && index < gameDisplayNames.Count
-                            && !string.IsNullOrEmpty(gameDisplayNames[index]))
-                ? gameDisplayNames[index]
-                : $"Game {index + 1}";
+            string label = SlotLabel(index);
             // Cycle the logo's palette across the slots
             Color[] faces = { theme.mustard, theme.coral, theme.orange };
             slotButtons.Add(RetroUI.Button($"Slot{i + 1}", grid.transform, theme, label, () => OnSelectGame(index), 36,
@@ -213,6 +244,26 @@ public class MainMenu : MonoBehaviour
 
         return panel;
     }
+
+    // One tab per game slot whose slug is in GameIds, in the slots' order
+    private ScoreHistoryPanel BuildScoresPanel(Transform parent)
+    {
+        var labels = new List<string>();
+        var games = new List<GameId>();
+        for (int i = 0; i < gameSceneNames.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out GameId game)) continue;
+            games.Add(game);
+            labels.Add(SlotLabel(i));
+        }
+        return ScoreHistoryPanel.Build(parent, theme, labels, games, ShowMain);
+    }
+
+    private string SlotLabel(int index) =>
+        gameDisplayNames != null && index < gameDisplayNames.Count && !string.IsNullOrEmpty(gameDisplayNames[index])
+            ? gameDisplayNames[index]
+            : $"Game {index + 1}";
 
     // ---------- UI helpers ----------
 
