@@ -9,6 +9,7 @@ The client's networking layer has three parts:
 - **HTTP.** `ApiClient` sends JSON requests to the GamesHub backend and returns every response as an `ApiResult<T>`; it never throws.
 - **Login.** `AuthService` logs in and out, saves the token between launches, and holds the current `Session`.
 - **Scores.** `ScoreService` sends a logged-in player's scores to the server and keeps a guest's scores on the device.
+- **Puzzles.** `PuzzleService` fetches daily puzzles the server picks; today only Price Is Nice's Steam game.
 
 `Services` builds all of them before the first scene loads and exposes them to the rest of the game.
 
@@ -23,11 +24,12 @@ The client's networking layer has three parts:
 | `ApiScoreStore.cs` | `ApiScoreStore` | global |
 | `LocalScoreStore.cs` | `LocalScoreStore` | global |
 | `ScoreService.cs` | `ScoreService` | global |
+| `PuzzleService.cs` | `PuzzleService`, `PriceIsNicePuzzleData`, `PuzzleResult`, `PuzzleOutcome` | global |
 | `DailyPuzzle.cs` | `DailyPuzzle` | global |
 
 The intended order of events at runtime:
 
-1. Before the first scene loads, `Services.init()` creates one `ApiClient` for `http://localhost:3900`, an `AuthService` around it, and a `ScoreService` built on both.
+1. Before the first scene loads, `Services.init()` creates one `ApiClient` for `http://localhost:3900`, an `AuthService` around it, a `ScoreService` built on both, and a `PuzzleService` on the same client.
 2. The `AuthService` constructor subscribes `Logout` to `ApiClient.Unauthorized`. The `ScoreService` constructor subscribes to `AuthService.SessionChanged`.
 3. When the main menu starts, `MainMenu` calls `Services.Auth.RestoreAsync()`. If a token was saved by an earlier launch, it is checked with `GET /auth/me`.
 4. If there is no saved session, the login screen calls `Services.Auth.LoginAsync(email, password)`, which sends `POST /auth/login`.
@@ -345,6 +347,36 @@ To make games playable again during development, use *GamesHub → Reset Played 
 
 `DailyPuzzle.TodayUtc()` returns today's UTC date as `yyyy-MM-dd` (InvariantCulture). `DailyPuzzle.Seed(slug, puzzleDate)` returns a non-negative seed that is the same on every device. Take the date **once** when a puzzle starts, and use that same string for the seed, `MarkAttemptStarted` and `SubmitAsync`. A game started just before midnight UTC then submits the date of the puzzle that was actually played, which the server accepts during its grace hour.
 
+## Puzzles
+
+Every game except Price Is Nice builds its daily puzzle on the client from `DailyPuzzle.Seed`. Price Is Nice's game is picked by the server, once per date, and served to everyone, so every player gets the same game. The backend design is in the server repo's `docs/price-is-nice-puzzle.md`.
+
+### PuzzleService
+
+`Services.Puzzles`. Constructor: `PuzzleService(ApiClient api)`, built in `Services.init` on the shared client.
+
+`Awaitable<PuzzleResult> GetPriceIsNiceAsync(string puzzleDate)` sends `GET /games/price-is-nice/puzzle?puzzleDate=…` **without** the login token (guests play too), and maps the response:
+
+| Response | `PuzzleOutcome` |
+| --- | --- |
+| 200 with a name and a price above 0 | `Success`; `Data` holds the puzzle |
+| 200 missing the name or price | `Error`, with a warning |
+| `503 puzzle_unavailable`, or no response | `Unavailable`: try again shortly. The first request of a day can take several seconds while the server asks Steam. |
+| `400 puzzle_date_closed` | `DateClosed`: the date is no longer (or not yet) open |
+| Anything else | `Error`, logged as an error |
+
+`PriceIsNicePuzzleData` (`[Serializable]`) mirrors the response's `puzzle` object: `puzzleDate`, `steamAppId`, `name`, `shortDescription` (plain text), `price.cents` and `price.formatted` (US price at pick time), and `screenshots`. The screenshot URLs are on Steam's CDN, which allows cross-origin requests, so WebGL can load them directly.
+
+### PriceIsNiceLoader
+
+`PriceIsNice/PriceIsNiceLoader.cs` (static) turns the API response into a playable `PriceIsNicePuzzle` and keeps it across scene loads.
+
+- **Preload:** `Preload(date)` starts the load in the background. It does nothing if that date is already loading or loaded, retries after a failure, and frees the previous date's textures. The main menu calls it on start, unless today's Price Is Nice was already played.
+- **Waiting:** `WaitAsync(date)` starts the load if needed, waits for it, and returns the puzzle, or null on failure. The game calls it in `Start`.
+- **Requests:** `Unavailable` is retried up to 3 times, 3 s apart.
+- **Screenshots:** downloads up to 8 in parallel (each takes ~8 MB in memory), as GPU-only textures.
+- **Clean-up:** on first use it deletes the `applist.json` that older builds cached in `persistentDataPath`.
+
 ## Services
 
 `Util.Services` is a static service locator: it builds the networking objects once and exposes them. Callers need `using Util;`.
@@ -353,7 +385,8 @@ To make games playable again during development, use *GamesHub → Reset Played 
 | --- | --- | --- |
 | `Auth` | `static AuthService Auth { get; private set; }` | The game-wide `AuthService`. |
 | `Scores` | `static ScoreService Scores { get; private set; }` | The game-wide `ScoreService`. |
-| `init` | `static void init()` | Creates one `ApiClient("http://localhost:3900")`, then `Auth`, then `Scores` with an `ApiScoreStore` on the same client and a new `LocalScoreStore`. |
+| `Puzzles` | `static PuzzleService Puzzles { get; private set; }` | The game-wide `PuzzleService`. |
+| `init` | `static void init()` | Creates one `ApiClient("http://localhost:3900")`, then `Auth`, then `Scores` with an `ApiScoreStore` on the same client and a new `LocalScoreStore`, then `Puzzles` on the same client. |
 
 `init` carries `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]`, so Unity calls it before any `Awake` in the first scene, and `Services.Auth` and `Services.Scores` are safe to use from `Awake` onward. The `ApiClient` is not exposed. Any future service must be built inside `init` with the same instance, so it shares the token and the `Unauthorized` event.
 
@@ -501,4 +534,4 @@ Most severe first.
 | 9 | A build or send exception reads as `NetworkError`. | A client bug, such as an unserializable body, looks like being offline to the caller. `ScoreService` queues the score and retries it on every flush until its day closes. The error log is the only signal. | Add an `ApiOutcome` for client-side failures if this ever hides a real bug. |
 | 10 | Minor style: `Services` is in `Util` while the other types are global; `init` is lowercase. | Inconsistent with C# conventions. | Put all the files in one namespace; rename to `Init`. |
 
-Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); logout reaches the server (`LogoutAsync`); exceptions from building or sending a request become `NetworkError` instead of escaping (Nov 17); `Send`'s doc comment is back above `Send`; and the main menu restores the session and greys out games already played today.
+Fixed since Nov 5: an empty login body no longer throws (it returns `ServerError`); a late 401 for a replaced token no longer logs out the new session; `Session` now keeps the whole `User` and no token copy; `AuthService` has no unused usings; sessions persist between launches (`RestoreAsync`); logout reaches the server (`LogoutAsync`); exceptions from building or sending a request become `NetworkError` instead of escaping (Nov 17); `Send`'s doc comment is back above `Send`; the main menu restores the session and greys out games already played today; and Price Is Nice gets its game from the server instead of calling Steam directly, so it can work in WebGL and every player gets the same game.

@@ -65,6 +65,14 @@ public class MainMenu : MonoBehaviour
 
         // A successful restore already refreshed through SessionChanged; this covers the rest.
         RefreshPlayedSlots();
+
+        // Pick today's Price Is Nice game and download its screenshots now, so the game opens
+        // without a wait. The result survives the scene change. Skipped once today's puzzle is
+        // played; does nothing if already loaded today.
+        string today = DailyPuzzle.TodayUtc();
+        PlayedStatus priceIsNice = await Services.Scores.GetPlayedStatusAsync(GameIds.PriceIsNice, today);
+        if (this == null) return;
+        if (priceIsNice != PlayedStatus.Played) PriceIsNiceLoader.Preload(today);
     }
 
     private void OnSessionChanged(Session session) => RefreshPlayedSlots();
