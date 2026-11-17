@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
 
-public static class SudokuGenerator
+public class SudokuGenerator
 {
-    public static bool unUsedInBox(int[,] grid, int rowStart, int colStart, int num)
+    private System.Random rand;
+
+    /// <param name="puzzleDate">The UTC date from <see cref="DailyPuzzle.TodayUtc"/>; also the date the score is submitted for.</param>
+    public SudokuGenerator(string puzzleDate)
+    {
+        rand = new Random(DailyPuzzle.Seed(GameIds.Sudoku.Slug, puzzleDate));
+    }
+    public bool unUsedInBox(int[,] grid, int rowStart, int colStart, int num)
     {
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
@@ -13,9 +20,8 @@ public static class SudokuGenerator
         return true;
     }
 
-    public static void fillBox(int[,] grid, int row, int col)
+    public void fillBox(int[,] grid, int row, int col)
     {
-        Random rand = new Random();
         int num;
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
@@ -28,7 +34,7 @@ public static class SudokuGenerator
             }
     }
     
-    public static bool unUsedInRow(int[,] grid, int i, int num)
+    public bool unUsedInRow(int[,] grid, int i, int num)
     {
         for (int j = 0; j < 9; j++)
             if (grid[i, j] == num)
@@ -37,7 +43,7 @@ public static class SudokuGenerator
         return true;
     }
 
-    public static bool unUsedInCol(int[,] grid, int j, int num)
+    public bool unUsedInCol(int[,] grid, int j, int num)
     {
         for (int i = 0; i < 9; i++)
             if (grid[i, j] == num)
@@ -46,19 +52,19 @@ public static class SudokuGenerator
         return true;
     }
 
-    public static bool checkIfSafe(int[,] grid, int i, int j, int num)
+    public bool checkIfSafe(int[,] grid, int i, int j, int num)
     {
         return (unUsedInRow(grid, i, num) && unUsedInCol(grid, j, num) &&
                 unUsedInBox(grid, i - i % 3, j - j % 3, num));
     }
 
-    public static void fillDiagonal(int[,] grid)
+    public void fillDiagonal(int[,] grid)
     {
         for (int i = 0; i < 9; i += 3)
             fillBox(grid, i, i);
     }
 
-    public static bool fillRemaining(int[,] grid, int i, int j)
+    public  bool fillRemaining(int[,] grid, int i, int j)
     {
         if (i == 9)
             return true;
@@ -82,7 +88,7 @@ public static class SudokuGenerator
         return false;
     }
 
-    //public static void removeKDigits(int[,] grid, int k)
+    //public  void removeKDigits(int[,] grid, int k)
     //{
     //    Random rand = new Random();
     //    while (k > 0)
@@ -99,7 +105,7 @@ public static class SudokuGenerator
     //    }
     //}
 
-    public static int[,] sudokuAnswerGenerator()
+    public  int[,] sudokuAnswerGenerator()
     {
         int[,] grid = new int[9, 9];
         fillDiagonal(grid);
@@ -107,13 +113,13 @@ public static class SudokuGenerator
         return grid;
     }
     
-    //public static int[,] sudokuPuzzleGenerator(int[,] answerKey, int k)
+    //public  int[,] sudokuPuzzleGenerator(int[,] answerKey, int k)
     //{
     //    removeKDigits(answerKey, k);
     //    return answerKey;
     //}
 
-    public static int[,] sudokuPuzzleGenerator(int[,] answerKey, int cellsToRemove)
+    public  int[,] sudokuPuzzleGenerator(int[,] answerKey, int cellsToRemove)
     {
         int[,] puzzle = (int[,])answerKey.Clone();
 
@@ -147,14 +153,13 @@ public static class SudokuGenerator
         return puzzle;
     }
 
-    private static void Shuffle<T>(List<T> list)
+    private void Shuffle<T>(List<T> list)
     {
-        System.Random rng = new System.Random();
         int n = list.Count;
         while (n > 1)
         {
             n--;
-            int k = rng.Next(n + 1);
+            int k = rand.Next(n + 1);
             (list[k], list[n]) = (list[n], list[k]);
         }
     }

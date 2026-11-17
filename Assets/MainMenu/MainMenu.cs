@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using Menu;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Util;
 
 public class MainMenu : MonoBehaviour
 {
@@ -15,27 +17,65 @@ public class MainMenu : MonoBehaviour
     [Header("Game slot scenes (scene names must be added to Build Settings)")]
     public List<string> gameSceneNames = new List<string>();
 
+    [Header("Game slot slugs (same order as the scenes; see GameIds)")]
+    [Tooltip("Used to grey out a game whose daily puzzle was already played. A blank or unknown slug is never greyed out.")]
+    public List<string> gameSlugs = new List<string> { "price-is-nice", "blackjack", "runner", "minesweeper", "sudoku" };
+
     [Header("Look")]
-    public Color backgroundColor = new Color(0.08f, 0.09f, 0.14f);
-    public Color buttonColor = new Color(0.20f, 0.45f, 0.85f);
-    public Color textColor = Color.white;
+    public RetroTheme theme;
+
+    [Tooltip("Where the menu is built, under the scene's logo. Left empty, a standalone canvas is created.")]
+    public RectTransform menuRoot;
+
+    [Tooltip("Hidden while the Scores screen is open, so the score list can use their space. " +
+             "Left empty, the objects named \"GamesHub Title\" and \"SuccessText\" are used.")]
+    public List<GameObject> hiddenOnScoresScreen = new List<GameObject>();
 
     private GameObject mainPanel;
     private GameObject gamesPanel;
-    private Font font;
+    private ScoreHistoryPanel scoresPanel;
+    private readonly List<Button> slotButtons = new List<Button>();
+    private int refreshVersion; // a newer refresh makes older, still-running ones discard their results
 
     private void Awake()
     {
-        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-
+        if (theme == null) theme = ScriptableObject.CreateInstance<RetroTheme>(); // default colors, no font/sprite
         EnsureEventSystem();
-        Canvas canvas = CreateCanvas();
+        Transform root = menuRoot != null ? menuRoot : CreateCanvas().transform;
 
-        mainPanel = BuildMainPanel(canvas.transform);
-        gamesPanel = BuildGamesPanel(canvas.transform);
+        mainPanel = BuildMainPanel(root);
+        gamesPanel = BuildGamesPanel(root);
+        scoresPanel = BuildScoresPanel(root);
+        FindObjectsHiddenOnScores();
         ShowMain();
     }
+
+    private void OnEnable()  => Services.Auth.SessionChanged += OnSessionChanged;
+    private void OnDisable() => Services.Auth.SessionChanged -= OnSessionChanged;
+
+    private async void Start()
+    {
+        // Logs the player back in with the token saved by an earlier launch. The menu loads again
+        // after every game, so a restore that failed offline is retried then. Already logged in:
+        // returns at once without a request.
+        RestoreResult restore = await Services.Auth.RestoreAsync();
+        if (this == null) return;
+        if (restore != RestoreResult.Restored && restore != RestoreResult.NoSavedSession)
+            Debug.Log($"Session restore: {restore}");
+
+        // A successful restore already refreshed through SessionChanged; this covers the rest.
+        RefreshPlayedSlots();
+
+        // Pick today's Price Is Nice game and download its screenshots now, so the game opens
+        // without a wait. The result survives the scene change. Skipped once today's puzzle is
+        // played; does nothing if already loaded today.
+        string today = DailyPuzzle.TodayUtc();
+        PlayedStatus priceIsNice = await Services.Scores.GetPlayedStatusAsync(GameIds.PriceIsNice, today);
+        if (this == null) return;
+        if (priceIsNice != PlayedStatus.Played) PriceIsNiceLoader.Preload(today);
+    }
+
+    private void OnSessionChanged(Session session) => RefreshPlayedSlots();
 
     // ---------- Button actions ----------
 
@@ -43,17 +83,68 @@ public class MainMenu : MonoBehaviour
     {
         mainPanel.SetActive(true);
         gamesPanel.SetActive(false);
+        scoresPanel.Hide();
+        SetScoresScreenObjectsHidden(false);
     }
 
     private void ShowGames()
     {
         mainPanel.SetActive(false);
         gamesPanel.SetActive(true);
+        scoresPanel.Hide();
+        SetScoresScreenObjectsHidden(false);
+        RefreshPlayedSlots(); // the day may have changed since the menu loaded
+    }
+
+    // Greys out every game whose daily puzzle was already played. Unknown (offline, or a saved login
+    // not restored yet) stays playable: this device hasn't started today's puzzle, or the local mark
+    // would have said Played, and the server still refuses a second score for the day.
+    public async void RefreshPlayedSlots()
+    {
+        int version = ++refreshVersion;
+        string today = DailyPuzzle.TodayUtc();
+
+        for (int i = 0; i < slotButtons.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out GameId game))
+            {
+                slotButtons[i].interactable = true;
+                continue;
+            }
+
+            PlayedStatus status = await Services.Scores.GetPlayedStatusAsync(game, today);
+            if (this == null || version != refreshVersion) return;
+            slotButtons[i].interactable = status != PlayedStatus.Played;
+        }
     }
 
     private void OnScores()
     {
-        // nothing yet lol
+        mainPanel.SetActive(false);
+        gamesPanel.SetActive(false);
+        SetScoresScreenObjectsHidden(true);
+        scoresPanel.Show();
+    }
+
+    // Falls back to the scene's object names, so the scene needs no extra setup. GameObject.Find
+    // only sees active objects, which these are when the menu wakes.
+    private void FindObjectsHiddenOnScores()
+    {
+        hiddenOnScoresScreen.RemoveAll(go => go == null);
+        if (hiddenOnScoresScreen.Count > 0) return;
+        foreach (string name in new[] { "GamesHub Title", "SuccessText" })
+        {
+            GameObject go = GameObject.Find(name);
+            if (go != null) hiddenOnScoresScreen.Add(go);
+            else Debug.LogWarning($"MainMenu: no active object named '{name}' to hide on the Scores screen.");
+        }
+    }
+
+    private void SetScoresScreenObjectsHidden(bool hidden)
+    {
+        foreach (GameObject go in hiddenOnScoresScreen)
+            if (go != null) go.SetActive(!hidden);
     }
 
     private void OnQuit()
@@ -82,17 +173,19 @@ public class MainMenu : MonoBehaviour
     {
         GameObject panel = CreatePanel("MainPanel", parent);
 
-        CreateText("Title", panel.transform, gameTitle, 90, FontStyle.Bold,
-            new Vector2(0.5f, 0.78f), new Vector2(900, 140));
+        // The scene already shows the logo; only draw a title when running standalone
+        if (menuRoot == null)
+            RetroUI.LayeredText("Title", panel.transform, theme, gameTitle, 110,
+                new Vector2(0.5f, 0.8f), new Vector2(900, 160));
 
         GameObject column = new GameObject("Buttons", typeof(RectTransform), typeof(VerticalLayoutGroup));
         column.transform.SetParent(panel.transform, false);
         RectTransform rt = column.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.38f);
-        rt.sizeDelta = new Vector2(320, 300);
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.4f);
+        rt.sizeDelta = new Vector2(440, 330);
 
         VerticalLayoutGroup v = column.GetComponent<VerticalLayoutGroup>();
-        v.spacing = 20;
+        v.spacing = 32;
         v.childAlignment = TextAnchor.MiddleCenter;
         v.childControlWidth = v.childControlHeight = true;
         v.childForceExpandWidth = v.childForceExpandHeight = true;
@@ -108,24 +201,24 @@ public class MainMenu : MonoBehaviour
     {
         GameObject panel = CreatePanel("GamesPanel", parent);
 
-        CreateText("Header", panel.transform, "Select a Game", 60, FontStyle.Bold,
-            new Vector2(0.5f, 0.88f), new Vector2(900, 100));
+        RetroUI.LayeredText("Header", panel.transform, theme, "Select a Game", 64,
+            new Vector2(0.5f, 0.69f), new Vector2(900, 90));
 
         // Size the grid to the number of games, shrinking cell height when the
         // rows wouldn't otherwise fit between the header and the Back button
         const int maxColumns = 3;
-        const float maxGridHeight = 420f;
-        Vector2 spacing = new Vector2(30, 40);
+        const float maxGridHeight = 380f;
+        Vector2 spacing = new Vector2(40, 40);
         int count = gameSceneNames.Count;
         int columns = Mathf.Clamp(count, 1, maxColumns);
         int rows = Mathf.Max(1, Mathf.CeilToInt(count / (float)maxColumns));
-        float cellHeight = Mathf.Min(200f, (maxGridHeight - spacing.y * (rows - 1)) / rows);
-        Vector2 cellSize = new Vector2(280, cellHeight);
+        float cellHeight = Mathf.Min(170f, (maxGridHeight - spacing.y * (rows - 1)) / rows);
+        Vector2 cellSize = new Vector2(360, cellHeight);
 
         GameObject grid = new GameObject("Slots", typeof(RectTransform), typeof(GridLayoutGroup));
         grid.transform.SetParent(panel.transform, false);
         RectTransform rt = grid.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.475f); // midway between header and Back button
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.405f); // midway between header and Back button
         rt.sizeDelta = new Vector2(columns * cellSize.x + (columns - 1) * spacing.x,
                                    rows * cellSize.y + (rows - 1) * spacing.y);
 
@@ -140,20 +233,45 @@ public class MainMenu : MonoBehaviour
         for (int i = 0; i < gameSceneNames.Count; i++)
         {
             int index = i; // capture for closure
-            string label = (gameDisplayNames != null && index < gameDisplayNames.Count
-                            && !string.IsNullOrEmpty(gameDisplayNames[index]))
-                ? gameDisplayNames[index]
-                : $"Game {index + 1}";
-            CreateButton($"Slot{i + 1}", grid.transform, label, () => OnSelectGame(index));
+            string label = SlotLabel(index);
+            // Cycle the logo's palette across the slots
+            Color[] faces = { theme.mustard, theme.coral, theme.orange };
+            slotButtons.Add(RetroUI.Button($"Slot{i + 1}", grid.transform, theme, label, () => OnSelectGame(index), 36,
+                faces[i % faces.Length]));
         }
 
-        Button back = CreateButton("BackButton", panel.transform, "Back", ShowMain);
-        RectTransform brt = back.GetComponent<RectTransform>();
-        brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.1f);
-        brt.sizeDelta = new Vector2(240, 60);
+        for (int i = 0; i < gameSceneNames.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out _))
+                Debug.LogWarning($"Slot {i + 1} ({gameSceneNames[i]}): slug '{slug}' is not in GameIds, so it is never greyed out.");
+        }
+
+        Button back = RetroUI.Button("BackButton", panel.transform, theme, "Back", ShowMain, 32, theme.cream);
+        RetroUI.Place((RectTransform)back.transform, new Vector2(0.5f, 0.145f), new Vector2(260, 72));
 
         return panel;
     }
+
+    // One tab per game slot whose slug is in GameIds, in the slots' order
+    private ScoreHistoryPanel BuildScoresPanel(Transform parent)
+    {
+        var labels = new List<string>();
+        var games = new List<GameId>();
+        for (int i = 0; i < gameSceneNames.Count; i++)
+        {
+            string slug = gameSlugs != null && i < gameSlugs.Count ? gameSlugs[i] : null;
+            if (!GameIds.TryFind(slug, out GameId game)) continue;
+            games.Add(game);
+            labels.Add(SlotLabel(i));
+        }
+        return ScoreHistoryPanel.Build(parent, theme, labels, games, ShowMain);
+    }
+
+    private string SlotLabel(int index) =>
+        gameDisplayNames != null && index < gameDisplayNames.Count && !string.IsNullOrEmpty(gameDisplayNames[index])
+            ? gameDisplayNames[index]
+            : $"Game {index + 1}";
 
     // ---------- UI helpers ----------
 
@@ -165,8 +283,11 @@ public class MainMenu : MonoBehaviour
 
         CanvasScaler scaler = go.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1280, 720);
+        scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
+
+        Image bg = go.AddComponent<Image>();
+        bg.color = theme.background;
         return canvas;
     }
 
@@ -180,57 +301,14 @@ public class MainMenu : MonoBehaviour
 
     private GameObject CreatePanel(string name, Transform parent)
     {
-        GameObject panel = new GameObject(name, typeof(RectTransform), typeof(Image));
-        panel.transform.SetParent(parent, false);
-        RectTransform rt = panel.GetComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-        panel.GetComponent<Image>().color = backgroundColor;
-        return panel;
-    }
-
-    private Text CreateText(string name, Transform parent, string content, int size,
-        FontStyle style, Vector2 anchor, Vector2 sizeDelta)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = anchor;
-        rt.sizeDelta = sizeDelta;
-
-        Text t = go.GetComponent<Text>();
-        t.font = font;
-        t.text = content;
-        t.fontSize = size;
-        t.fontStyle = style;
-        t.alignment = TextAnchor.MiddleCenter;
-        t.color = textColor;
-        return t;
+        // Transparent: the scene's backdrop and logo show through
+        RectTransform rt = RetroUI.Rect(name, parent);
+        RetroUI.Stretch(rt);
+        return rt.gameObject;
     }
 
     private Button CreateButton(string name, Transform parent, string label, UnityEngine.Events.UnityAction onClick)
     {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-
-        Image img = go.GetComponent<Image>();
-        img.color = buttonColor;
-
-        Button btn = go.GetComponent<Button>();
-        btn.targetGraphic = img;
-        ColorBlock colors = btn.colors;
-        colors.highlightedColor = new Color(0.35f, 0.6f, 1f);
-        colors.pressedColor = new Color(0.12f, 0.3f, 0.6f);
-        btn.colors = colors;
-        btn.onClick.AddListener(onClick);
-
-        Text t = CreateText("Label", go.transform, label, 32, FontStyle.Normal, new Vector2(0.5f, 0.5f), Vector2.zero);
-        RectTransform trt = t.GetComponent<RectTransform>();
-        trt.anchorMin = Vector2.zero;
-        trt.anchorMax = Vector2.one;
-        trt.offsetMin = trt.offsetMax = Vector2.zero;
-
-        return btn;
+        return RetroUI.Button(name, parent, theme, label, onClick, 44);
     }
 }

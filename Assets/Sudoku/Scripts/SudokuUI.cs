@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
+using Util;
 
 public class SudokuUI : MonoBehaviour
 {
@@ -22,11 +23,17 @@ public class SudokuUI : MonoBehaviour
     private int mistakes = 0;
     private float timer = 0;
     private bool notesMode = false;
-
+    private string date;
+    private bool solved;
+    public SudokuGenerator sudokuGenerator;
+    
     void Start()
     {
-        int[,] answer = SudokuGenerator.sudokuAnswerGenerator();
-        int[,] starting = SudokuGenerator.sudokuPuzzleGenerator(answer, 40);
+        date = DailyPuzzle.TodayUtc();
+        Services.Scores.MarkAttemptStarted(GameIds.Sudoku, date);
+        sudokuGenerator = new SudokuGenerator(date);
+        int[,] answer = sudokuGenerator.sudokuAnswerGenerator();
+        int[,] starting = sudokuGenerator.sudokuPuzzleGenerator(answer, 40);
 
         board.LoadPuzzle(answer, starting);
         BuildGrid();
@@ -62,7 +69,7 @@ public class SudokuUI : MonoBehaviour
 
     void Update()
     {
-        timer += Time.deltaTime;
+        if (!solved) timer += Time.deltaTime;
         int timeInSeconds = Mathf.FloorToInt(timer);
         timerLabel.text = timeInSeconds.ToString();
 
@@ -146,8 +153,17 @@ public class SudokuUI : MonoBehaviour
 
     void ShowWinPopup()
     {   
-        int timeInSeconds = Mathf.FloorToInt(timer);
-        winPopupText.text = $"winner\nScore: {timeInSeconds + mistakes*30}";
+        solved = true;
+        int score = ScoreFormulas.Sudoku(timer, mistakes);
+        winPopupText.text = $"winner\nScore: {score}";
         winPopup.SetActive(true);
+        SubmitScore(score);
+    }
+
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.Sudoku, date, score);
+        Debug.Log($"Sudoku score {score} for {date}: {result}");
     }
 }

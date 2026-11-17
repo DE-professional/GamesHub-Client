@@ -9,6 +9,10 @@ public class CardDisplay : MonoBehaviour
     public Image rankImage;
     public Image suitImage;
 
+    [Header("Suit Colors")]
+    public Color redSuitColor = new Color(0.80f, 0.24f, 0.10f);   // 70s burnt red-orange
+    public Color blackSuitColor = new Color(0.20f, 0.10f, 0.04f); // Dark brown ink
+
     /// <summary>
     /// Configures the card visual components using the provided data and atlas.
     /// </summary>
@@ -38,11 +42,11 @@ public class CardDisplay : MonoBehaviour
     {
         if (cardSuit == Suit.Hearts || cardSuit == Suit.Diamonds)
         {
-            return Color.red; // Or custom red: new Color(0.8f, 0.1f, 0.1f)
+            return redSuitColor;
         }
         else
         {
-            return Color.black; // Or custom dark charcoal/black
+            return blackSuitColor;
         }
     }
 

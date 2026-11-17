@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
+using Util;
 using UnityEngine.SceneManagement;
 using System; // Required for DateTime
 
@@ -30,6 +31,9 @@ public class MinesweeperGame : MonoBehaviour
     private bool gameStarted = false;
     private float timer = 0f;
     private int flagsRemaining;
+    
+    private string date;
+    private System.Random random;
 
     // Struct to hold individual cell data
     private class Cell
@@ -40,11 +44,15 @@ public class MinesweeperGame : MonoBehaviour
         public bool isFlagged;
         public int adjacentMines;
         public GameObject uiButton;
+        public MineTile tile;
+        public bool Alternate => (x + y) % 2 == 1;
     }
     
     
     void Start()
     {
+        date = DailyPuzzle.TodayUtc();
+        random = new System.Random(DailyPuzzle.Seed(GameIds.Minesweeper.Slug, date));
         if (titlePanel != null)
         {
             titlePanel.SetActive(true);
@@ -54,10 +62,11 @@ public class MinesweeperGame : MonoBehaviour
             StartGame();
         }
         if (returnToMenuButton != null) returnToMenuButton.SetActive(false);
-        mineCount = UnityEngine.Random.Range (minMines, maxMines);
+        mineCount = random.Next(minMines, maxMines);
         flagsRemaining = mineCount;
         
         UpdateFlagText();
+        if (timerText != null) timerText.text = "Time: 0";
         LoadHighScore(); // This also checks if a new day has started
         GenerateBoard();
     }
@@ -92,16 +101,12 @@ public class MinesweeperGame : MonoBehaviour
             for (int x = 0; x < width; x++)
             {
                 GameObject obj = Instantiate(buttonPrefab, boardPanel);
-                
-                // Ensure the button starts with completely blank text
-                TextMeshProUGUI btnText = obj.GetComponentInChildren<TextMeshProUGUI>();
-                if (btnText != null) btnText.text = "";
 
-                Cell cell = new Cell { x = x, y = y, uiButton = obj };
+                Cell cell = new Cell { x = x, y = y, uiButton = obj, tile = obj.GetComponent<MineTile>() };
                 grid[x, y] = cell;
+                cell.tile.SetHidden(cell.Alternate);
 
                 // Setup click listener supporting left and right clicks
-                Button btn = obj.GetComponent<Button>();
                 int rx = x;
                 int ry = y;
                 
@@ -126,25 +131,8 @@ public class MinesweeperGame : MonoBehaviour
             if (cell.isRevealed) return;
 
             cell.isFlagged = !cell.isFlagged;
-            TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-
-            if (cell.isFlagged)
-            {
-                flagsRemaining--;
-                if (btnText != null)
-                {
-                    btnText.text = "F"; // Using 'F' for Flag
-                }
-            }
-            else
-            {
-                flagsRemaining++;
-                if (btnText != null)
-                {
-                    btnText.text = "";
-                    btnText.color = Color.black;
-                }
-            }
+            cell.tile.SetFlagged(cell.isFlagged);
+            flagsRemaining += cell.isFlagged ? -1 : 1;
             UpdateFlagText();
             return;
         }
@@ -158,6 +146,7 @@ public class MinesweeperGame : MonoBehaviour
             if (!gameStarted)
             {
                 gameStarted = true;
+                Services.Scores.MarkAttemptStarted(GameIds.Minesweeper, date);
                 PlaceMines(x, y);
                 CalculateAdjacentMines();
                 RevealSafePatch(x, y);
@@ -181,8 +170,8 @@ public class MinesweeperGame : MonoBehaviour
         int placed = 0;
         while (placed < mineCount)
         {
-            int rx = UnityEngine.Random.Range(0, width);
-            int ry = UnityEngine.Random.Range(0, height);
+            int rx = random.Next(0, width);  
+            int ry = random.Next(0, height);
 
             // Don't place mine on or immediately around the first click
             if (Mathf.Abs(rx - firstX) <= 1 && Mathf.Abs(ry - firstY) <= 1) continue;
@@ -241,22 +230,10 @@ public class MinesweeperGame : MonoBehaviour
         if (cell.isRevealed || cell.isFlagged) return;
 
         cell.isRevealed = true;
-        cell.uiButton.GetComponent<Image>().color = Color.gray;
+        cell.tile.SetRevealed(cell.adjacentMines, cell.Alternate);
 
-        TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-
-        if (cell.adjacentMines > 0)
+        if (cell.adjacentMines == 0)
         {
-            if (btnText != null)
-            {
-                btnText.text = cell.adjacentMines.ToString();
-                btnText.color = Color.black;
-            }
-        }
-        else
-        {
-            if (btnText != null) btnText.text = "";
-
             for (int dx = -1; dx <= 1; dx++)
             {
                 for (int dy = -1; dy <= 1; dy++)
@@ -275,22 +252,13 @@ public class MinesweeperGame : MonoBehaviour
     void BlowUp(Cell clickedMine)
     {
         gameOver = true;
-        clickedMine.uiButton.GetComponent<Image>().color = Color.red;
         Debug.Log("Game Over!");
         if (returnToMenuButton != null) returnToMenuButton.SetActive(true);
+        SubmitScore(ScoreFormulas.Loss);
         
         foreach (var cell in grid)
         {
-            if (cell.isMine)
-            {
-                TextMeshProUGUI btnText = cell.uiButton.GetComponentInChildren<TextMeshProUGUI>();
-                if (btnText != null)
-                {
-                    btnText.text = "*";
-                    btnText.color = Color.white;
-                }
-                cell.uiButton.GetComponent<Image>().color = Color.red;
-            }
+            if (cell.isMine) cell.tile.SetMine(cell == clickedMine);
         }
     }
 
@@ -312,7 +280,15 @@ public class MinesweeperGame : MonoBehaviour
             Debug.Log("You Win!");
             if (returnToMenuButton != null) returnToMenuButton.SetActive(true);
             SaveHighScore();
+            SubmitScore(ScoreFormulas.Minesweeper(timer));
         }
+    }
+
+    // Saves the day's score: on the server when logged in, on the device for a guest.
+    async void SubmitScore(int score)
+    {
+        SubmitResult result = await Services.Scores.SubmitAsync(GameIds.Minesweeper, date, score);
+        Debug.Log($"Minesweeper score {score} for {date}: {result}");
     }
 
     void UpdateFlagText()

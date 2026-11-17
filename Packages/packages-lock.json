@@ -1,12 +1,5 @@
 {
   "dependencies": {
-    "com.harumak.fancycarouselview": {
-      "version": "https://github.com/Haruma-K/FancyCarouselView.git?path=/Assets/FancyCarouselView",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "5cc67512ba2d3160115b0850571ce0cfd227329f"
-    },
     "com.nobi.roundedcorners": {
       "version": "https://github.com/kirevdokimov/Unity-UI-Rounded-Corners.git",
       "depth": 0,
@@ -372,13 +365,6 @@
       "source": "git",
       "dependencies": {},
       "hash": "11036028b90df09212e2bc238c13983a4cfcd105"
-    },
-    "jp.setchi.fancyscrollview": {
-      "version": "https://github.com/setchi/FancyScrollView.git#upm",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "e5d10d3e5961848f93be43c2911344750b509a88"
     },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",
