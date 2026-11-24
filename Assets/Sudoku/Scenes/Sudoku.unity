@@ -643,6 +643,31 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &291179730
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 291179725}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2533724cdcf640588930301abb9777e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SudokuRetroUI
+  theme: {fileID: 11400000, guid: b4645092897e440ad94e6f87d215f055, type: 2}
+  bodyFont: {fileID: 11400000, guid: 2cb12e14e2971409181820a18a95ff6c, type: 2}
+  game: {fileID: 1144718548}
+  notesButton: {fileID: 1316398340}
+  notesLabel: {fileID: 37290923}
+  returnButton: {fileID: 1903613738}
+  board: {fileID: 584805275}
+  mistakesCaption: {fileID: 218453350}
+  mistakes: {fileID: 789009120}
+  timerCaption: {fileID: 1538084510}
+  timer: {fileID: 372758205}
+  winPopup: {fileID: 1366389251}
+  winText: {fileID: 110850573}
 --- !u!1 &372758203
 GameObject:
   m_ObjectHideFlags: 0
@@ -950,7 +975,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 35}
   m_SizeDelta: {x: 916, y: 916}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &584805275
@@ -1876,31 +1901,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1903613735}
   m_CullTransparentMesh: 1
---- !u!114 &291179730
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 291179725}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a2533724cdcf640588930301abb9777e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SudokuRetroUI
-  theme: {fileID: 11400000, guid: b4645092897e440ad94e6f87d215f055, type: 2}
-  bodyFont: {fileID: 11400000, guid: 2cb12e14e2971409181820a18a95ff6c, type: 2}
-  game: {fileID: 1144718548}
-  notesButton: {fileID: 1316398340}
-  notesLabel: {fileID: 37290923}
-  returnButton: {fileID: 1903613738}
-  board: {fileID: 584805275}
-  mistakesCaption: {fileID: 218453350}
-  mistakes: {fileID: 789009120}
-  timerCaption: {fileID: 1538084510}
-  timer: {fileID: 372758205}
-  winPopup: {fileID: 1366389251}
-  winText: {fileID: 110850573}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
