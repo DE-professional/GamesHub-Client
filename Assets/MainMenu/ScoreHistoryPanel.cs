@@ -8,9 +8,10 @@ using UnityEngine.Events;
 using Util;
 
 /// <summary>
-/// The Scores screen: one tab per game, and the player's history for the selected game,
-/// sortable by date or score. Logged-in players see their server history; guests see the
-/// scores saved on this device. Built in code by <see cref="Build"/>, like the rest of the menu.
+/// The Scores screen: one tab per game, and two views of the selected game. "My scores" is the
+/// player's history, sortable by date or score: the server history when logged in, the scores saved
+/// on this device for a guest. "Leaderboard" is the global boards (<see cref="LeaderboardView"/>).
+/// Built in code by <see cref="Build"/>, like the rest of the menu.
 /// </summary>
 public class ScoreHistoryPanel : MonoBehaviour
 {
@@ -23,6 +24,11 @@ public class ScoreHistoryPanel : MonoBehaviour
     RetroTheme theme;
     GameId[] games;
     UnityEngine.UI.Button[] tabs;
+    RectTransform historyView;
+    LeaderboardView leaderboard;
+    UnityEngine.UI.Button myScoresButton;
+    UnityEngine.UI.Button leaderboardButton;
+    bool showingLeaderboard;
     RectTransform content;
     TextMeshProUGUI summaryText;
     TextMeshProUGUI statusText;
@@ -52,11 +58,11 @@ public class ScoreHistoryPanel : MonoBehaviour
         return panel;
     }
 
-    /// <summary>Opens the panel and loads the selected game's history.</summary>
+    /// <summary>Opens the panel on the view it was last left on, and loads the selected game's data.</summary>
     public void Show()
     {
         gameObject.SetActive(true);
-        Load();
+        ShowView(showingLeaderboard);
     }
 
     public void Hide() => gameObject.SetActive(false);
@@ -72,7 +78,11 @@ public class ScoreHistoryPanel : MonoBehaviour
     }
 
     // Login or logout while the panel is open: the history now comes from somewhere else.
-    void OnSessionChanged(Session session) => Load();
+    // (The leaderboard view reloads itself.)
+    void OnSessionChanged(Session session)
+    {
+        if (!showingLeaderboard) Load();
+    }
 
     // ---------- Layout ----------
 
@@ -103,8 +113,12 @@ public class ScoreHistoryPanel : MonoBehaviour
             tabLabel.fontSizeMax = 24;
         }
 
+        // "My scores": its own container, so the leaderboard can take its place
+        historyView = RetroUI.Rect("HistoryView", transform);
+        RetroUI.Stretch(historyView);
+
         // Summary on the left, sort button on the right, both above the list
-        summaryText = RetroUI.Text("Summary", transform, theme, "", 26, theme.cream);
+        summaryText = RetroUI.Text("Summary", historyView, theme, "", 26, theme.cream);
         RetroUI.Place(summaryText.rectTransform, new Vector2(0.5f, 0.69f), new Vector2(700, 52));
         summaryText.rectTransform.anchoredPosition = new Vector2(-150, 0);
         summaryText.alignment = TextAlignmentOptions.Left;
@@ -112,32 +126,47 @@ public class ScoreHistoryPanel : MonoBehaviour
         summaryText.fontSizeMin = 16;
         summaryText.fontSizeMax = 26;
 
-        UnityEngine.UI.Button sortButton = RetroUI.Button("SortButton", transform, theme, "", CycleSort, 24, theme.orange);
+        UnityEngine.UI.Button sortButton = RetroUI.Button("SortButton", historyView, theme, "", CycleSort, 24, theme.orange);
         RetroUI.Place((RectTransform)sortButton.transform, new Vector2(0.5f, 0.69f), new Vector2(300, 52));
         ((RectTransform)sortButton.transform).anchoredPosition = new Vector2(350, 0);
         sortLabel = sortButton.GetComponentInChildren<TextMeshProUGUI>();
 
-        BuildList();
+        content = (RectTransform)BuildScrollList("ScoreList", historyView, theme, ListBottom, ListTop).content;
 
-        statusText = RetroUI.Text("Status", transform, theme, "", 30, theme.cream);
+        statusText = RetroUI.Text("Status", historyView, theme, "", 30, theme.cream);
         statusText.rectTransform.anchorMin = new Vector2(0.5f, ListBottom);
         statusText.rectTransform.anchorMax = new Vector2(0.5f, ListTop);
         statusText.rectTransform.sizeDelta = new Vector2(1000, 0);
         statusText.textWrappingMode = TextWrappingModes.Normal;
 
+        leaderboard = LeaderboardView.Build(transform, theme);
+
+        // Bottom row: the two views, then Back
+        myScoresButton = RetroUI.Button("MyScoresButton", transform, theme, "My scores", () => ShowView(false), 30);
+        RetroUI.Place((RectTransform)myScoresButton.transform, new Vector2(0.5f, 0.145f), new Vector2(320, 72));
+        ((RectTransform)myScoresButton.transform).anchoredPosition = new Vector2(-340, 0);
+
+        leaderboardButton = RetroUI.Button("LeaderboardButton", transform, theme, "Leaderboard", () => ShowView(true), 30);
+        RetroUI.Place((RectTransform)leaderboardButton.transform, new Vector2(0.5f, 0.145f), new Vector2(320, 72));
+
         UnityEngine.UI.Button back = RetroUI.Button("BackButton", transform, theme, "Back", onBack, 32, theme.cream);
         RetroUI.Place((RectTransform)back.transform, new Vector2(0.5f, 0.145f), new Vector2(260, 72));
+        ((RectTransform)back.transform).anchoredPosition = new Vector2(340, 0);
 
         UpdateTabs();
         UpdateSortLabel();
     }
 
-    // ScrollView: ScrollRect → Viewport (clips, catches drags) → Content (sized by its rows)
-    void BuildList()
+    /// <summary>
+    /// A 1000-wide scrolling list between <paramref name="bottom"/> and <paramref name="top"/> (anchor
+    /// heights). ScrollRect → Viewport (clips, catches drags) → Content (a vertical layout sized by its rows).
+    /// </summary>
+    public static UnityEngine.UI.ScrollRect BuildScrollList(string name, Transform parent, RetroTheme theme,
+        float bottom, float top)
     {
-        RectTransform scroll = RetroUI.Rect("ScoreList", transform);
-        scroll.anchorMin = new Vector2(0.5f, ListBottom);
-        scroll.anchorMax = new Vector2(0.5f, ListTop);
+        RectTransform scroll = RetroUI.Rect(name, parent);
+        scroll.anchorMin = new Vector2(0.5f, bottom);
+        scroll.anchorMax = new Vector2(0.5f, top);
         scroll.sizeDelta = new Vector2(1000, 0);
 
         RectTransform viewport = RetroUI.Rect("Viewport", scroll);
@@ -147,7 +176,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         var hit = viewport.gameObject.AddComponent<UnityEngine.UI.Image>();
         hit.color = Color.clear;
 
-        content = RetroUI.Rect("Content", viewport);
+        RectTransform content = RetroUI.Rect("Content", viewport);
         content.anchorMin = new Vector2(0f, 1f);
         content.anchorMax = new Vector2(1f, 1f);
         content.pivot = new Vector2(0.5f, 1f);
@@ -169,13 +198,14 @@ public class ScoreHistoryPanel : MonoBehaviour
         sr.scrollSensitivity = 30f;
 
         // Shown only when the rows overflow; the viewport then shrinks to make room for it.
-        sr.verticalScrollbar = BuildScrollbar(scroll);
+        sr.verticalScrollbar = BuildScrollbar(scroll, theme);
         sr.verticalScrollbarVisibility = UnityEngine.UI.ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
         sr.verticalScrollbarSpacing = 12f;
+        return sr;
     }
 
     // Scrollbar (track) → SlidingArea → Handle, pinned to the list's right edge
-    UnityEngine.UI.Scrollbar BuildScrollbar(RectTransform scroll)
+    static UnityEngine.UI.Scrollbar BuildScrollbar(RectTransform scroll, RetroTheme theme)
     {
         const float width = 16f;
 
@@ -207,7 +237,25 @@ public class ScoreHistoryPanel : MonoBehaviour
         if (index == selected) return;
         selected = index;
         UpdateTabs();
-        Load();
+        ShowView(showingLeaderboard);
+    }
+
+    // Switches between "My scores" and "Leaderboard", and loads the selected game into that view
+    void ShowView(bool leaderboardView)
+    {
+        showingLeaderboard = leaderboardView;
+        historyView.gameObject.SetActive(!leaderboardView);
+        UpdateViewButtons();
+
+        if (!leaderboardView)
+        {
+            leaderboard.Hide();
+            Load();
+        }
+        else if (games.Length > 0)
+        {
+            leaderboard.Show(games[selected]);
+        }
     }
 
     void CycleSort()
@@ -337,6 +385,19 @@ public class ScoreHistoryPanel : MonoBehaviour
         }
     }
 
+    void UpdateViewButtons()
+    {
+        SetFace(myScoresButton, showingLeaderboard ? theme.mustard : theme.coral);
+        SetFace(leaderboardButton, showingLeaderboard ? theme.coral : theme.mustard);
+    }
+
+    static void SetFace(UnityEngine.UI.Button button, Color face)
+    {
+        RetroButton retro = button.GetComponent<RetroButton>();
+        retro.normalColor = face;
+        retro.faceImage.color = face;
+    }
+
     void UpdateSortLabel()
     {
         sortLabel.text = sort switch
@@ -348,7 +409,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         };
     }
 
-    static void Inset(RectTransform rt)
+    internal static void Inset(RectTransform rt)
     {
         RetroUI.Stretch(rt);
         rt.offsetMin = new Vector2(24, 0);
@@ -356,10 +417,10 @@ public class ScoreHistoryPanel : MonoBehaviour
     }
 
     // Puzzle dates are calendar dates: format them as they are, never convert to local time.
-    static string FormatDate(string puzzleDate) =>
+    internal static string FormatDate(string puzzleDate) =>
         DateTime.TryParseExact(puzzleDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime d)
             ? d.ToString("MMM d, yyyy", CultureInfo.InvariantCulture).ToUpperInvariant()
             : puzzleDate;
 
-    static string FormatScore(int score) => score.ToString("N0", CultureInfo.InvariantCulture);
+    internal static string FormatScore(int score) => score.ToString("N0", CultureInfo.InvariantCulture);
 }

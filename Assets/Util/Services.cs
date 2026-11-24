@@ -17,6 +17,9 @@ namespace Util
         /// <summary>The game-wide <see cref="PuzzleService"/>, for puzzles the server picks. Safe to use from <c>Awake</c> onward.</summary>
         public static PuzzleService Puzzles {get; private set;}
 
+        /// <summary>The game-wide <see cref="LeaderboardService"/>. Safe to use from <c>Awake</c> onward.</summary>
+        public static LeaderboardService Leaderboards {get; private set;}
+
 
         /// <summary>
         /// Builds the shared <see cref="ApiClient"/> and the services that use it. Called by
@@ -34,6 +37,7 @@ namespace Util
             Auth = new AuthService(api);
             Scores = new ScoreService(Auth, new ApiScoreStore(api), new LocalScoreStore());
             Puzzles = new PuzzleService(api);
+            Leaderboards = new LeaderboardService(api);
         }
 
     }
