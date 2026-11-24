@@ -26,6 +26,11 @@ public class SudokuUI : MonoBehaviour
     private string date;
     private bool solved;
     public SudokuGenerator sudokuGenerator;
+
+    /// <summary>Raised for each cell as the grid is built, after it's set up (SudokuRetroUI colors it).</summary>
+    public event Action<CellView> CellCreated;
+    /// <summary>Raised when notes mode is toggled, with the new state.</summary>
+    public event Action<bool> NotesModeChanged;
     
     void Start()
     {
@@ -52,6 +57,7 @@ public class SudokuUI : MonoBehaviour
                 view.Setup(r, c, data.value, data.isSolved, OnCellClicked);
 
                 cellViews[r, c] = view;
+                CellCreated?.Invoke(view);
             }
         }
     }
@@ -71,7 +77,7 @@ public class SudokuUI : MonoBehaviour
     {
         if (!solved) timer += Time.deltaTime;
         int timeInSeconds = Mathf.FloorToInt(timer);
-        timerLabel.text = timeInSeconds.ToString();
+        timerLabel.text = $"{timeInSeconds / 60}:{timeInSeconds % 60:00}";
 
         if (selectedRow < 0 || selectedCol < 0) return;
         if (Keyboard.current == null) return;
@@ -149,13 +155,14 @@ public class SudokuUI : MonoBehaviour
     {
         notesMode = !notesMode;
         notesButtonLabel.text = notesMode ? "Notes: On" : "Notes: Off";
+        NotesModeChanged?.Invoke(notesMode);
     }
 
     void ShowWinPopup()
     {   
         solved = true;
         int score = ScoreFormulas.Sudoku(timer, mistakes);
-        winPopupText.text = $"winner\nScore: {score}";
+        winPopupText.text = $"Score: {score}";
         winPopup.SetActive(true);
         SubmitScore(score);
     }
