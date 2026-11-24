@@ -73,11 +73,11 @@ public class RunnerManager : MonoBehaviour
 
     void Update()
     {
-        if (IsGameOver)
-        {
-            if (RestartPressed()) Restart();
-            return;
-        }
+        // if (IsGameOver)
+        // {
+        //     if (RestartPressed()) Restart();
+        //     return;
+        // }
 
         if (!IsStarted)
         {
@@ -107,7 +107,7 @@ public class RunnerManager : MonoBehaviour
 
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
         if (gameOverScoreLabel != null)
-            gameOverScoreLabel.text = $"Score: {Score}\nBest: {best}\n\nPress Space to restart";
+            gameOverScoreLabel.text = $"Score: {Score}\nBest: {best}\n\n";
     }
 
     // Saves the day's score: on the server when logged in, on the device for a guest.
@@ -125,16 +125,16 @@ public class RunnerManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    bool RestartPressed()
-    {
-        if (Keyboard.current != null && (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.rKey.wasPressedThisFrame))
-            return true;
-
-        // Clicks on the game-over panel's buttons (e.g. Return to Menu) aren't restarts
-        bool pointerPressed = (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            || (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame);
-        return pointerPressed && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject());
-    }
+    // bool RestartPressed()
+    // {
+    //     if (Keyboard.current != null && (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.rKey.wasPressedThisFrame))
+    //         return true;
+    //
+    //     // Clicks on the game-over panel's buttons (e.g. Return to Menu) aren't restarts
+    //     bool pointerPressed = (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+    //         || (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame);
+    //     return pointerPressed && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject());
+    // }
 
     bool StartKeyPressed()
     {
